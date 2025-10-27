@@ -70,3 +70,6 @@ id.json
 *.key
 wallet.json
 keypair.json
+
+#frontend
+frontend/

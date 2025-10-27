@@ -12,9 +12,8 @@ pub fn handler(
     let position = &mut ctx.accounts.position;
     let clock = Clock::get()?;
 
-    // Validation
-    require!(!market.resolved, ErrorCode::MarketAlreadyResolved);
-    require!(clock.unix_timestamp < market.end_timestamp, ErrorCode::MarketEnded);
+    // Validation - check if market is still active
+    require!(market.is_active(clock.unix_timestamp), ErrorCode::MarketEnded);
     require!(amount >= 10_000_000, ErrorCode::BetTooSmall); // 0.01 SOL minimum
 
     // Calculate 2% platform fee

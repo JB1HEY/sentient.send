@@ -5,24 +5,29 @@ use crate::error::ErrorCode;
 pub fn handler(ctx: Context<ClaimWinnings>) -> Result<()> {
     let market = &ctx.accounts.market;
     let position = &mut ctx.accounts.position;
+    let clock = Clock::get()?;
 
-    // Validation
-    require!(market.resolved, ErrorCode::MarketNotResolved);
+    // Validation - market must be ended (past end_timestamp)
+    require!(!market.is_active(clock.unix_timestamp), ErrorCode::MarketNotEnded);
     require!(!position.claimed, ErrorCode::AlreadyClaimed);
 
-    // Calculate payout
-    let payout = position.calculate_payout(market.outcome, market);
-    require!(payout > 0, ErrorCode::NoWinnings);
+    // Calculate proportional payout based on final pool ratios
+    let yes_payout = market.calculate_yes_payout(position.yes_shares);
+    let no_payout = market.calculate_no_payout(position.no_shares);
+    let total_payout = yes_payout + no_payout;
 
-    // Transfer winnings from market to user
-    **market.to_account_info().try_borrow_mut_lamports()? -= payout;
-    **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += payout;
+    require!(total_payout > 0, ErrorCode::NoWinnings);
+
+    // Transfer proportional winnings from market to user
+    **market.to_account_info().try_borrow_mut_lamports()? -= total_payout;
+    **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += total_payout;
 
     // Mark as claimed
     position.claimed = true;
 
-    msg!("Winnings claimed: {} SOL", payout / 1_000_000_000);
-    msg!("Profit: {} SOL", (payout as i64 - position.amount_invested as i64) / 1_000_000_000);
+    msg!("Proportional payout claimed: {} SOL", total_payout / 1_000_000_000);
+    msg!("YES shares: {} -> {} SOL", position.yes_shares, yes_payout / 1_000_000_000);
+    msg!("NO shares: {} -> {} SOL", position.no_shares, no_payout / 1_000_000_000);
 
     Ok(())
 }

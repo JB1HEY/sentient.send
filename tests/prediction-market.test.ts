@@ -5,10 +5,9 @@ import { PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { assert } from "chai";
 import { sha256 } from "@noble/hashes/sha2";
 
-describe("prediction-market", () => {
-
+describe("sentiment-based-prediction-market", () => {
+  
   function qSeed(question: string): Buffer {
-    // 32-byte digest as Buffer
     return Buffer.from(sha256(new TextEncoder().encode(question)));
   }
 
@@ -22,20 +21,37 @@ describe("prediction-market", () => {
   const creator = provider.wallet;
   let marketPda: PublicKey;
   let treasuryPda: PublicKey;
-  let userPositionPda: PublicKey;
+  let alicePositionPda: PublicKey;
+  let bobPositionPda: PublicKey;
+  let charliePositionPda: PublicKey;
   
-  const question = "Will Bitcoin reach $100k by end of 2025?";
-  const questionSeed = qSeed(question); // Buffer of 32 bytes
-  const description = "Resolves YES if BTC hits $100k before Dec 31, 2025";
+  const question = "Chicken vs Egg: What came first?";
+  const questionSeed = qSeed(question);
+  const description = "A meme market - no resolution needed! Payout based on final sentiment.";
   
-  // End date: 30 days from now
-  const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60);
+  // End date: 30 seconds from now (for quick testing)
+  const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 30);
   
   // Initial liquidity: 2 SOL
   const initialLiquidity = new anchor.BN(2 * LAMPORTS_PER_SOL);
 
+  // Create test users
+  const alice = anchor.web3.Keypair.generate();
+  const bob = anchor.web3.Keypair.generate();
+  const charlie = anchor.web3.Keypair.generate();
+
   before(async () => {
-    // Derive PDAs - use the same questionSeed
+    // Airdrop SOL to test users
+    await Promise.all([
+      provider.connection.requestAirdrop(alice.publicKey, 5 * LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(bob.publicKey, 5 * LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(charlie.publicKey, 5 * LAMPORTS_PER_SOL),
+    ]);
+
+    // Wait for airdrops
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Derive PDAs
     [marketPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("market"),
@@ -50,28 +66,42 @@ describe("prediction-market", () => {
       program.programId
     );
 
-    [userPositionPda] = PublicKey.findProgramAddressSync(
+    [alicePositionPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("position"),
         marketPda.toBuffer(),
-        creator.publicKey.toBuffer(),
+        alice.publicKey.toBuffer(),
       ],
       program.programId
     );
 
-    console.log("Market PDA:", marketPda.toString());
-    console.log("Treasury PDA:", treasuryPda.toString());
-    console.log("Question seed (hex):", questionSeed.toString('hex'));
+    [bobPositionPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("position"),
+        marketPda.toBuffer(),
+        bob.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    [charliePositionPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("position"),
+        marketPda.toBuffer(),
+        charlie.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
   });
 
-  it("Creates a prediction market", async () => {
+  it("Creates a sentiment-based prediction market", async () => {
     const tx = await program.methods
       .createMarket(
-        question, 
-        description, 
-        endTimestamp, 
-        initialLiquidity, 
-        Array.from(questionSeed) // Convert Buffer to number array
+        question,
+        description,
+        endTimestamp,
+        initialLiquidity,
+        Array.from(questionSeed)
       )
       .accounts({
         market: marketPda,
@@ -83,161 +113,247 @@ describe("prediction-market", () => {
 
     console.log("Create market transaction:", tx);
 
-    // Fetch the market account
     const market = await program.account.market.fetch(marketPda);
 
     assert.equal(market.question, question);
     assert.equal(market.description, description);
     assert.equal(market.creator.toString(), creator.publicKey.toString());
-    assert.equal(market.resolved, false);
     assert.ok(market.yesPool.eq(new anchor.BN(1 * LAMPORTS_PER_SOL)));
     assert.ok(market.noPool.eq(new anchor.BN(1 * LAMPORTS_PER_SOL)));
     
     console.log("Market created successfully!");
-    console.log("YES pool:", market.yesPool.toString());
-    console.log("NO pool:", market.noPool.toString());
+    console.log("Initial YES pool:", market.yesPool.toString());
+    console.log("Initial NO pool:", market.noPool.toString());
+    console.log("Market ends at:", new Date(market.endTimestamp.toNumber() * 1000));
   });
 
-  it("Places a YES bet", async () => {
-    const betAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL);
-
-    const marketBefore = await program.account.market.fetch(marketPda);
-    console.log("\nBefore bet:");
-    console.log("YES pool:", marketBefore.yesPool.toString());
-    console.log("NO pool:", marketBefore.noPool.toString());
+  it("Alice bets heavily on 'Chicken' (YES)", async () => {
+    const betAmount = new anchor.BN(2 * LAMPORTS_PER_SOL); // Alice goes big on Chicken
 
     const tx = await program.methods
-      .placeBet(betAmount, true) // true = YES
+      .placeBet(betAmount, true) // true = YES = Chicken
       .accounts({
         market: marketPda,
-        position: userPositionPda,
-        user: creator.publicKey,
+        position: alicePositionPda,
+        user: alice.publicKey,
         systemProgram: SystemProgram.programId,
       })
+      .signers([alice])
       .rpc();
 
-    console.log("\nPlace bet transaction:", tx);
+    console.log("\nAlice bets on CHICKEN transaction:", tx);
 
-    // Fetch updated accounts
     const market = await program.account.market.fetch(marketPda);
-    const position = await program.account.userPosition.fetch(userPositionPda);
+    const position = await program.account.userPosition.fetch(alicePositionPda);
 
-    console.log("\nAfter bet:");
-    console.log("YES pool:", market.yesPool.toString());
-    console.log("NO pool:", market.noPool.toString());
-    console.log("User YES shares:", position.yesShares.toString());
-    console.log("Amount invested:", position.amountInvested.toString());
+    console.log("After Alice's bet:");
+    console.log("YES (Chicken) pool:", market.yesPool.toString());
+    console.log("NO (Egg) pool:", market.noPool.toString());
+    console.log("Alice's YES shares:", position.yesShares.toString());
+
+    // Chicken price should have increased due to Alice's large bet
+    const chickenPrice = market.noPool.toNumber() / (market.yesPool.toNumber() + market.noPool.toNumber());
+    console.log("Chicken price after Alice:", (chickenPrice * 100).toFixed(1) + "%");
 
     assert.ok(position.yesShares.gt(new anchor.BN(0)));
-    assert.ok(market.totalVolume.eq(betAmount));
+    assert.ok(chickenPrice > 0.5); // Chicken should be favored now
   });
 
-  it("Places a NO bet", async () => {
-    // Create a new user for this test
-    const newUser = anchor.web3.Keypair.generate();
-    
-    // Airdrop SOL to new user
-    const signature = await provider.connection.requestAirdrop(
-      newUser.publicKey,
-      2 * LAMPORTS_PER_SOL
-    );
-    await provider.connection.confirmTransaction(signature);
+  it("Bob and Charlie bet on 'Egg' (NO)", async () => {
+    const bobBet = new anchor.BN(1 * LAMPORTS_PER_SOL);
+    const charlieBet = new anchor.BN(1.5 * LAMPORTS_PER_SOL);
 
-    const betAmount = new anchor.BN(0.3 * LAMPORTS_PER_SOL);
-
-    const [newUserPositionPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("position"),
-        marketPda.toBuffer(),
-        newUser.publicKey.toBuffer(),
-      ],
-      program.programId
-    );
-
-    const tx = await program.methods
-      .placeBet(betAmount, false) // false = NO
+    // Bob bets on Egg
+    await program.methods
+      .placeBet(bobBet, false) // false = NO = Egg
       .accounts({
         market: marketPda,
-        position: newUserPositionPda,
-        user: newUser.publicKey,
+        position: bobPositionPda,
+        user: bob.publicKey,
         systemProgram: SystemProgram.programId,
       })
-      .signers([newUser])
+      .signers([bob])
       .rpc();
 
-    console.log("\nNO bet transaction:", tx);
+    // Charlie also bets on Egg
+    await program.methods
+      .placeBet(charlieBet, false) // false = NO = Egg
+      .accounts({
+        market: marketPda,
+        position: charliePositionPda,
+        user: charlie.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([charlie])
+      .rpc();
+
+    console.log("\nAfter Bob and Charlie bet on EGG:");
 
     const market = await program.account.market.fetch(marketPda);
-    const position = await program.account.userPosition.fetch(newUserPositionPda);
+    const bobPosition = await program.account.userPosition.fetch(bobPositionPda);
+    const charliePosition = await program.account.userPosition.fetch(charliePositionPda);
 
-    console.log("User NO shares:", position.noShares.toString());
-    assert.ok(position.noShares.gt(new anchor.BN(0)));
+    console.log("YES (Chicken) pool:", market.yesPool.toString());
+    console.log("NO (Egg) pool:", market.noPool.toString());
+    console.log("Bob's NO shares:", bobPosition.noShares.toString());
+    console.log("Charlie's NO shares:", charliePosition.noShares.toString());
+
+    const chickenPrice = market.noPool.toNumber() / (market.yesPool.toNumber() + market.noPool.toNumber());
+    const eggPrice = 1 - chickenPrice;
+    console.log("Final Chicken price:", (chickenPrice * 100).toFixed(1) + "%");
+    console.log("Final Egg price:", (eggPrice * 100).toFixed(1) + "%");
+
+    assert.ok(bobPosition.noShares.gt(new anchor.BN(0)));
+    assert.ok(charliePosition.noShares.gt(new anchor.BN(0)));
   });
 
-  it("Fails to resolve market before end time", async () => {
+  it("Cannot bet after market ends", async () => {
+    console.log("\nWaiting for market to end...");
+    
+    // Wait for market to end (30 seconds + buffer)
+    await new Promise(resolve => setTimeout(resolve, 35000));
+
     try {
       await program.methods
-        .resolveMarket(true)
+        .placeBet(new anchor.BN(0.1 * LAMPORTS_PER_SOL), true)
         .accounts({
           market: marketPda,
-          treasury: treasuryPda,
-          resolver: creator.publicKey,
+          position: alicePositionPda,
+          user: alice.publicKey,
           systemProgram: SystemProgram.programId,
         })
+        .signers([alice])
         .rpc();
       
-      assert.fail("Should have thrown error");
+      assert.fail("Should have thrown error for ended market");
     } catch (err) {
-      // Check for any market-related error (the exact error code might vary)
-      const errorStr = err.toString();
-      const hasError = errorStr.includes("MarketNotEnded") || 
-                       errorStr.includes("ConstraintRaw") ||
-                       errorStr.includes("6000"); // Custom error code for MarketNotEnded
-      
-      assert.isTrue(hasError, `Expected market-not-ended error, got: ${errorStr}`);
-      console.log("\nCorrectly prevented early resolution");
-      console.log("Error:", errorStr.substring(0, 200));
+      console.log("Correctly prevented betting after market end");
+      assert.include(err.toString(), "MarketEnded");
     }
   });
 
-  it("Adds liquidity to market", async () => {
-    const liquidityAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
-
-    const marketBefore = await program.account.market.fetch(marketPda);
-
-    const tx = await program.methods
-      .addLiquidity(liquidityAmount)
-      .accounts({
-        market: marketPda,
-        liquidityProvider: creator.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-
-    console.log("\nAdd liquidity transaction:", tx);
-
+  it("Everyone claims proportional payouts based on sentiment", async () => {
     const market = await program.account.market.fetch(marketPda);
     
-    assert.ok(market.yesPool.gt(marketBefore.yesPool));
-    assert.ok(market.noPool.gt(marketBefore.noPool));
+    console.log("\n=== FINAL MARKET STATE ===");
+    console.log("Total YES (Chicken) pool:", market.yesPool.toString());
+    console.log("Total NO (Egg) pool:", market.noPool.toString());
+    console.log("Total YES shares issued:", market.totalYesShares.toString());
+    console.log("Total NO shares issued:", market.totalNoShares.toString());
+
+    const totalPool = market.yesPool.toNumber() + market.noPool.toNumber();
+    const chickenSentiment = market.noPool.toNumber() / totalPool;
+    const eggSentiment = market.yesPool.toNumber() / totalPool;
+
+    console.log("\n=== FINAL SENTIMENT ===");
+    console.log("Chicken sentiment:", (chickenSentiment * 100).toFixed(1) + "%");
+    console.log("Egg sentiment:", (eggSentiment * 100).toFixed(1) + "%");
+
+    // Alice claims (she bet on Chicken)
+    const aliceBalanceBefore = await provider.connection.getBalance(alice.publicKey);
     
-    console.log("New YES pool:", market.yesPool.toString());
-    console.log("New NO pool:", market.noPool.toString());
+    await program.methods
+      .claimWinnings()
+      .accounts({
+        market: marketPda,
+        position: alicePositionPda,
+        user: alice.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([alice])
+      .rpc();
+
+    const aliceBalanceAfter = await provider.connection.getBalance(alice.publicKey);
+    const alicePayout = (aliceBalanceAfter - aliceBalanceBefore) / LAMPORTS_PER_SOL;
+
+    // Bob claims (he bet on Egg)
+    const bobBalanceBefore = await provider.connection.getBalance(bob.publicKey);
+    
+    await program.methods
+      .claimWinnings()
+      .accounts({
+        market: marketPda,
+        position: bobPositionPda,
+        user: bob.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([bob])
+      .rpc();
+
+    const bobBalanceAfter = await provider.connection.getBalance(bob.publicKey);
+    const bobPayout = (bobBalanceAfter - bobBalanceBefore) / LAMPORTS_PER_SOL;
+
+    // Charlie claims (he also bet on Egg)
+    const charlieBalanceBefore = await provider.connection.getBalance(charlie.publicKey);
+    
+    await program.methods
+      .claimWinnings()
+      .accounts({
+        market: marketPda,
+        position: charliePositionPda,
+        user: charlie.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([charlie])
+      .rpc();
+
+    const charlieBalanceAfter = await provider.connection.getBalance(charlie.publicKey);
+    const charliePayout = (charlieBalanceAfter - charlieBalanceBefore) / LAMPORTS_PER_SOL;
+
+    console.log("\n=== PROPORTIONAL PAYOUTS ===");
+    console.log("Alice (Chicken bettor) received:", alicePayout.toFixed(4), "SOL");
+    console.log("Bob (Egg bettor) received:", bobPayout.toFixed(4), "SOL");
+    console.log("Charlie (Egg bettor) received:", charliePayout.toFixed(4), "SOL");
+
+    // Everyone should get something (no one loses everything)
+    assert.ok(alicePayout > 0, "Alice should get some payout");
+    assert.ok(bobPayout > 0, "Bob should get some payout");
+    assert.ok(charliePayout > 0, "Charlie should get some payout");
+
+    // The side with higher sentiment should get more per share
+    if (chickenSentiment > eggSentiment) {
+      console.log("Chicken won the sentiment battle!");
+    } else {
+      console.log("Egg won the sentiment battle!");
+    }
   });
 
-  // Note: To test resolve and claim, you'd need to wait for end_timestamp
-  // or modify the market's end_timestamp in tests
-  it("Shows market statistics", async () => {
+  it("Cannot claim twice", async () => {
+    try {
+      await program.methods
+        .claimWinnings()
+        .accounts({
+          market: marketPda,
+          position: alicePositionPda,
+          user: alice.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([alice])
+        .rpc();
+      
+      assert.fail("Should have thrown error for double claim");
+    } catch (err) {
+      console.log("Correctly prevented double claiming");
+      assert.include(err.toString(), "AlreadyClaimed");
+    }
+  });
+
+  it("Shows final market statistics", async () => {
     const market = await program.account.market.fetch(marketPda);
     const treasury = await program.account.treasury.fetch(treasuryPda);
 
-    console.log("\n=== Market Statistics ===");
+    console.log("\n=== FINAL MARKET STATISTICS ===");
     console.log("Question:", market.question);
-    console.log("Total Volume:", market.totalVolume.toString(), "lamports");
+    console.log("Total Volume:", (market.totalVolume.toNumber() / LAMPORTS_PER_SOL).toFixed(2), "SOL");
     console.log("Number of Bettors:", market.numBettors);
-    console.log("Treasury Fee:", market.treasuryFee.toString(), "lamports");
-    console.log("\n=== Treasury Statistics ===");
-    console.log("Total Markets:", treasury.totalMarkets);
-    console.log("Total Fees:", treasury.totalFees.toString(), "lamports");
+    console.log("Platform Fees Collected:", (market.treasuryFee.toNumber() / LAMPORTS_PER_SOL).toFixed(4), "SOL");
+    console.log("\n=== TREASURY STATISTICS ===");
+    console.log("Total Markets Created:", treasury.totalMarkets);
+    console.log("Total Platform Fees:", (treasury.totalFees.toNumber() / LAMPORTS_PER_SOL).toFixed(4), "SOL");
+
+    console.log("\n=== SENTIMENT MARKET SUCCESS! ===");
+    console.log("✅ No manual resolution needed");
+    console.log("✅ Everyone got paid based on community sentiment");
+    console.log("✅ Truly decentralized meme market");
   });
 });

@@ -2,14 +2,11 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Market has already been resolved")]
-    MarketAlreadyResolved,
+    #[msg("Market has ended, trading is closed")]
+    MarketEnded,
     
     #[msg("Market has not ended yet")]
     MarketNotEnded,
-    
-    #[msg("Market has ended, betting is closed")]
-    MarketEnded,
     
     #[msg("Insufficient funds for this bet")]
     InsufficientFunds,
@@ -26,17 +23,11 @@ pub enum ErrorCode {
     #[msg("Bet amount is too small (minimum 0.01 SOL)")]
     BetTooSmall,
     
-    #[msg("Market has not been resolved yet")]
-    MarketNotResolved,
-    
     #[msg("No winnings to claim")]
     NoWinnings,
     
     #[msg("Winnings already claimed")]
     AlreadyClaimed,
-    
-    #[msg("Only market creator can resolve")]
-    UnauthorizedResolver,
     
     #[msg("Math overflow occurred")]
     MathOverflow,

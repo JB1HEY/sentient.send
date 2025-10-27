@@ -5,8 +5,9 @@ pub mod instructions;
 pub mod error;
 
 use instructions::*;
+use state::*;
 
-declare_id!("8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs");
+declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod prediction_market {
@@ -40,15 +41,7 @@ pub mod prediction_market {
         instructions::place_bet::handler(ctx, amount, is_yes)
     }
 
-    /// Resolve the market with final outcome
-    pub fn resolve_market(
-        ctx: Context<ResolveMarket>,
-        outcome: bool, // true = YES, false = NO
-    ) -> Result<()> {
-        instructions::resolve_market::handler(ctx, outcome)
-    }
-
-    /// Claim winnings after market resolution
+    /// Claim proportional winnings after market ends
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
         instructions::claim_winnings::handler(ctx)
     }

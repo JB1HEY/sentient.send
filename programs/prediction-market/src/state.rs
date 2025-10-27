@@ -1,4 +1,3 @@
-use crate::error::ErrorCode;
 use anchor_lang::prelude::*;
 
 /// Main market account storing all market data
@@ -7,9 +6,7 @@ pub struct Market {
     pub creator: Pubkey,           // Who created the market
     pub question: String,          // The prediction question
     pub description: String,       // Additional context
-    pub end_timestamp: i64,        // When betting closes
-    pub resolved: bool,            // Has the market been resolved?
-    pub outcome: bool,             // Final outcome (true = YES, false = NO)
+    pub end_timestamp: i64,        // When trading closes
     pub yes_pool: u64,            // SOL in YES pool (lamports)
     pub no_pool: u64,             // SOL in NO pool (lamports)
     pub k: u128,                  // Constant product for AMM (yes_pool * no_pool)
@@ -20,7 +17,6 @@ pub struct Market {
     pub total_volume: u64,        // Total amount bet
     pub num_bettors: u32,         // Number of unique bettors
     pub bump: u8,                 // PDA bump seed
-    pub question_hash: [u8; 32],
 }
 
 impl Market {
@@ -29,8 +25,6 @@ impl Market {
         4 + 200 +                  // question (max 200 chars)
         4 + 500 +                  // description (max 500 chars)
         8 +                        // end_timestamp
-        1 +                        // resolved
-        1 +                        // outcome
         8 +                        // yes_pool
         8 +                        // no_pool
         16 +                       // k
@@ -40,8 +34,12 @@ impl Market {
         8 +                        // creation_fee
         8 +                        // total_volume
         4 +                        // num_bettors
-        1 +                        // bump
-        32;                        // question_hash
+        1;                         // bump
+
+    /// Check if market is still active (before end time)
+    pub fn is_active(&self, current_timestamp: i64) -> bool {
+        current_timestamp < self.end_timestamp
+    }
 
     /// Get current price for YES (between 0 and 1)
     pub fn get_yes_price(&self) -> u64 {
@@ -59,26 +57,44 @@ impl Market {
 
     /// Calculate shares received for buying YES
     pub fn calculate_yes_shares(&self, amount_in: u64) -> Result<u64> {
-        // Using constant product: (yes_pool - shares_out) * (no_pool + amount_in) = k
-        // Solving for shares_out
         let new_no_pool = self.no_pool.checked_add(amount_in)
-            .ok_or(error!(ErrorCode::MathOverflow))?;
+            .ok_or(error::ErrorCode::MathOverflow)?;
         
         let new_yes_pool = (self.k / new_no_pool as u128) as u64;
         
         Ok(self.yes_pool.checked_sub(new_yes_pool)
-            .ok_or(error!(ErrorCode::MathOverflow))?)
+            .ok_or(error::ErrorCode::MathOverflow)?)
     }
 
     /// Calculate shares received for buying NO
     pub fn calculate_no_shares(&self, amount_in: u64) -> Result<u64> {
         let new_yes_pool = self.yes_pool.checked_add(amount_in)
-            .ok_or(error!(ErrorCode::MathOverflow))?;
+            .ok_or(error::ErrorCode::MathOverflow)?;
         
         let new_no_pool = (self.k / new_yes_pool as u128) as u64;
         
         Ok(self.no_pool.checked_sub(new_no_pool)
-            .ok_or(error!(ErrorCode::MathOverflow))?)
+            .ok_or(error::ErrorCode::MathOverflow)?)
+    }
+
+    /// Calculate proportional payout for YES shares after market ends
+    pub fn calculate_yes_payout(&self, yes_shares: u64) -> u64 {
+        if self.total_yes_shares == 0 {
+            return 0;
+        }
+        let total_pool = self.yes_pool + self.no_pool;
+        let yes_pool_share = (self.yes_pool as u128 * total_pool as u128) / (self.yes_pool + self.no_pool) as u128;
+        ((yes_pool_share * yes_shares as u128) / self.total_yes_shares as u128) as u64
+    }
+
+    /// Calculate proportional payout for NO shares after market ends
+    pub fn calculate_no_payout(&self, no_shares: u64) -> u64 {
+        if self.total_no_shares == 0 {
+            return 0;
+        }
+        let total_pool = self.yes_pool + self.no_pool;
+        let no_pool_share = (self.no_pool as u128 * total_pool as u128) / (self.yes_pool + self.no_pool) as u128;
+        ((no_pool_share * no_shares as u128) / self.total_no_shares as u128) as u64
     }
 }
 
