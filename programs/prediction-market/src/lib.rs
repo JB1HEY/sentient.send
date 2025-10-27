@@ -6,7 +6,7 @@ pub mod error;
 
 use instructions::*;
 
-declare_id!("8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs");
+declare_id!("2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ");
 
 #[program]
 pub mod prediction_market {

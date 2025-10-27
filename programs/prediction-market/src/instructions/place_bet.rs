@@ -8,9 +8,14 @@ pub fn handler(
     amount: u64,
     is_yes: bool,
 ) -> Result<()> {
+    let clock = Clock::get()?;
+    
+    // Capture keys before mutable borrows
+    let user_key = ctx.accounts.user.key();
+    let market_key = ctx.accounts.market.key();
+    
     let market = &mut ctx.accounts.market;
     let position = &mut ctx.accounts.position;
-    let clock = Clock::get()?;
 
     // Validation - check if market is still active
     require!(market.is_active(clock.unix_timestamp), ErrorCode::MarketEnded);
@@ -57,13 +62,21 @@ pub fn handler(
 
     // Update position
     position.amount_invested += amount;
+    
+    // Set position fields if this is first bet
+    if position.user == Pubkey::default() {
+        position.user = user_key;
+        position.market = market_key;
+        position.bump = ctx.bumps.position;
+        position.claimed = false;
+    }
 
     // Update market stats
     market.treasury_fee += fee;
     market.total_volume += amount;
     
-    // Track unique bettors
-    if position.yes_shares + position.no_shares == shares {
+    // Track unique bettors (only count first bet)
+    if position.amount_invested == amount {
         market.num_bettors += 1;
     }
 

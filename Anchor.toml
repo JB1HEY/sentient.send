@@ -2,14 +2,14 @@
 anchor_version = "0.32.1"
 
 [features]
-seeds = false
+resolution = true
 skip-lint = false
-
-[programs.localnet]
-prediction_market = "8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs"
 
 [programs.devnet]
 prediction_market = "8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs"
+
+[programs.localnet]
+prediction_market = "2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ"
 
 [programs.mainnet]
 prediction_market = "8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs"
@@ -18,7 +18,7 @@ prediction_market = "8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
