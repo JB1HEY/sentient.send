@@ -5,9 +5,8 @@ pub mod instructions;
 pub mod error;
 
 use instructions::*;
-use state::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs");
 
 #[program]
 pub mod prediction_market {
@@ -22,7 +21,7 @@ pub mod prediction_market {
         initial_liquidity: u64,
         question_seed: [u8; 32],
     ) -> Result<()> {
-        instructions::create_market::handler(
+        create_market::handler(
             ctx,
             question,
             description,
@@ -38,12 +37,12 @@ pub mod prediction_market {
         amount: u64,
         is_yes: bool,
     ) -> Result<()> {
-        instructions::place_bet::handler(ctx, amount, is_yes)
+        place_bet::handler(ctx, amount, is_yes)
     }
 
     /// Claim proportional winnings after market ends
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
-        instructions::claim_winnings::handler(ctx)
+        claim_winnings::handler(ctx)
     }
 
     /// Add liquidity to a market (optional, for deeper markets)
@@ -51,7 +50,7 @@ pub mod prediction_market {
         ctx: Context<AddLiquidity>,
         amount: u64,
     ) -> Result<()> {
-        instructions::add_liquidity::handler(ctx, amount)
+        add_liquidity::handler(ctx, amount)
     }
 }
 

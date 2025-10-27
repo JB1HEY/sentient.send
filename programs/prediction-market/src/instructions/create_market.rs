@@ -64,10 +64,10 @@ pub fn handler(
     // Update treasury stats (use checked add if you want safety)
     treasury.total_fees = treasury.total_fees
         .checked_add(creation_fee)
-        .ok_or(error!(ErrorCode::MathOverflow))?;
+        .ok_or(ErrorCode::MathOverflow)?;
     treasury.total_markets = treasury.total_markets
         .checked_add(1)
-        .ok_or(error!(ErrorCode::MathOverflow))?;
+        .ok_or(ErrorCode::MathOverflow)?;
 
     msg!("Market created: {}", market.question);
     msg!("Initial YES price: {}%", market.get_yes_price() / 100);

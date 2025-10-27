@@ -8,6 +8,9 @@ pub enum ErrorCode {
     #[msg("Market has not ended yet")]
     MarketNotEnded,
     
+    #[msg("Market has already been resolved")]
+    MarketAlreadyResolved,
+    
     #[msg("Insufficient funds for this bet")]
     InsufficientFunds,
     

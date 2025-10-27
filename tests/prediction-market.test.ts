@@ -120,6 +120,7 @@ describe("sentiment-based-prediction-market", () => {
     assert.equal(market.creator.toString(), creator.publicKey.toString());
     assert.ok(market.yesPool.eq(new anchor.BN(1 * LAMPORTS_PER_SOL)));
     assert.ok(market.noPool.eq(new anchor.BN(1 * LAMPORTS_PER_SOL)));
+    assert.equal(market.resolved, false);
     
     console.log("Market created successfully!");
     console.log("Initial YES pool:", market.yesPool.toString());
@@ -226,7 +227,7 @@ describe("sentiment-based-prediction-market", () => {
         .rpc();
       
       assert.fail("Should have thrown error for ended market");
-    } catch (err) {
+    } catch (err: any) {
       console.log("Correctly prevented betting after market end");
       assert.include(err.toString(), "MarketEnded");
     }
@@ -332,7 +333,7 @@ describe("sentiment-based-prediction-market", () => {
         .rpc();
       
       assert.fail("Should have thrown error for double claim");
-    } catch (err) {
+    } catch (err: any) {
       console.log("Correctly prevented double claiming");
       assert.include(err.toString(), "AlreadyClaimed");
     }

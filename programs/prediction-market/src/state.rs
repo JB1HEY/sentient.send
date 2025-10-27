@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::error::ErrorCode;
 
 /// Main market account storing all market data
 #[account]
@@ -7,6 +8,8 @@ pub struct Market {
     pub question: String,          // The prediction question
     pub description: String,       // Additional context
     pub end_timestamp: i64,        // When trading closes
+    pub resolved: bool,            // Has market ended?
+    pub outcome: bool,             // Final outcome (if resolved)
     pub yes_pool: u64,            // SOL in YES pool (lamports)
     pub no_pool: u64,             // SOL in NO pool (lamports)
     pub k: u128,                  // Constant product for AMM (yes_pool * no_pool)
@@ -16,6 +19,7 @@ pub struct Market {
     pub creation_fee: u64,        // Fee paid to create market
     pub total_volume: u64,        // Total amount bet
     pub num_bettors: u32,         // Number of unique bettors
+    pub question_hash: [u8; 32],  // Hash of question for PDA seed
     pub bump: u8,                 // PDA bump seed
 }
 
@@ -25,6 +29,8 @@ impl Market {
         4 + 200 +                  // question (max 200 chars)
         4 + 500 +                  // description (max 500 chars)
         8 +                        // end_timestamp
+        1 +                        // resolved
+        1 +                        // outcome
         8 +                        // yes_pool
         8 +                        // no_pool
         16 +                       // k
@@ -34,6 +40,7 @@ impl Market {
         8 +                        // creation_fee
         8 +                        // total_volume
         4 +                        // num_bettors
+        32 +                       // question_hash
         1;                         // bump
 
     /// Check if market is still active (before end time)
@@ -58,23 +65,23 @@ impl Market {
     /// Calculate shares received for buying YES
     pub fn calculate_yes_shares(&self, amount_in: u64) -> Result<u64> {
         let new_no_pool = self.no_pool.checked_add(amount_in)
-            .ok_or(error::ErrorCode::MathOverflow)?;
+            .ok_or(ErrorCode::MathOverflow)?;
         
         let new_yes_pool = (self.k / new_no_pool as u128) as u64;
         
         Ok(self.yes_pool.checked_sub(new_yes_pool)
-            .ok_or(error::ErrorCode::MathOverflow)?)
+            .ok_or(ErrorCode::MathOverflow)?)
     }
 
     /// Calculate shares received for buying NO
     pub fn calculate_no_shares(&self, amount_in: u64) -> Result<u64> {
         let new_yes_pool = self.yes_pool.checked_add(amount_in)
-            .ok_or(error::ErrorCode::MathOverflow)?;
+            .ok_or(ErrorCode::MathOverflow)?;
         
         let new_no_pool = (self.k / new_yes_pool as u128) as u64;
         
         Ok(self.no_pool.checked_sub(new_no_pool)
-            .ok_or(error::ErrorCode::MathOverflow)?)
+            .ok_or(ErrorCode::MathOverflow)?)
     }
 
     /// Calculate proportional payout for YES shares after market ends
@@ -121,7 +128,7 @@ impl UserPosition {
         1;                          // bump
 
     /// Calculate potential payout if market resolves to outcome
-    pub fn calculate_payout(&self, outcome: bool, market: &Market) -> u64 {
+    pub fn calculate_payout(&self, outcome: bool, _market: &Market) -> u64 {
         if outcome {
             // YES won - each YES share is worth 1 SOL
             self.yes_shares
