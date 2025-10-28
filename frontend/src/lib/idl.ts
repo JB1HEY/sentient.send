@@ -22,14 +22,10 @@ export const IDL = {
       "discriminator": [103, 226, 97, 235, 200, 188, 251, 254],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
+        { "name": "position", "writable": true },
         { "name": "treasury", "writable": true },
-        { "name": "creator_token_account", "writable": true },
-        { "name": "usdc_mint" },
         { "name": "creator", "writable": true, "signer": true },
-        { "name": "token_program" },
-        { "name": "system_program", "address": "11111111111111111111111111111111" },
-        { "name": "rent", "address": "SysvarRent111111111111111111111111111111111" }
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
       ],
       "args": [
         { "name": "question", "type": "string" },
@@ -44,11 +40,8 @@ export const IDL = {
       "discriminator": [222, 62, 67, 220, 63, 166, 126, 33],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
         { "name": "position", "writable": true },
-        { "name": "user_token_account", "writable": true },
         { "name": "user", "writable": true, "signer": true },
-        { "name": "token_program" },
         { "name": "system_program", "address": "11111111111111111111111111111111" }
       ],
       "args": [
@@ -61,11 +54,8 @@ export const IDL = {
       "discriminator": [161, 215, 24, 59, 14, 236, 242, 221],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
         { "name": "position", "writable": true },
-        { "name": "user_token_account", "writable": true },
-        { "name": "user", "writable": true, "signer": true },
-        { "name": "token_program" }
+        { "name": "user", "writable": true, "signer": true }
       ],
       "args": []
     },
@@ -74,11 +64,8 @@ export const IDL = {
       "discriminator": [45, 108, 41, 166, 198, 81, 230, 71],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
         { "name": "treasury", "writable": true },
-        { "name": "creator_token_account", "writable": true },
-        { "name": "creator", "writable": true, "signer": true },
-        { "name": "token_program" }
+        { "name": "creator", "writable": true, "signer": true }
       ],
       "args": []
     },
@@ -87,11 +74,8 @@ export const IDL = {
       "discriminator": [200, 123, 76, 231, 167, 90, 123, 45],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
-        { "name": "treasury", "writable": true },
-        { "name": "protocol_token_account", "writable": true },
-        { "name": "protocol_authority", "writable": true, "signer": true },
-        { "name": "token_program" }
+        { "name": "treasury" },
+        { "name": "protocol_authority", "writable": true, "signer": true }
       ],
       "args": []
     }
@@ -108,20 +92,17 @@ export const IDL = {
     { "code": 6003, "name": "QuestionTooLong", "msg": "Question is too long (max 200 characters)" },
     { "code": 6004, "name": "DescriptionTooLong", "msg": "Description is too long (max 500 characters)" },
     { "code": 6005, "name": "InvalidEndTimestamp", "msg": "End timestamp must be in the future" },
-    { "code": 6006, "name": "BetTooSmall", "msg": "Bet amount is below minimum (1 USDC)" },
-    { "code": 6007, "name": "BetTooLarge", "msg": "Bet amount exceeds maximum (200 USDC)" },
+    { "code": 6006, "name": "BetTooSmall", "msg": "Bet amount is below minimum (0.01 SOL)" },
+    { "code": 6007, "name": "BetTooLarge", "msg": "Bet amount exceeds maximum (1 SOL)" },
     { "code": 6008, "name": "NoWinnings", "msg": "No winnings to claim" },
     { "code": 6009, "name": "AlreadyClaimed", "msg": "Winnings already claimed" },
     { "code": 6010, "name": "MathOverflow", "msg": "Math overflow occurred" },
-    { "code": 6011, "name": "CreationAmountTooSmall", "msg": "Market creation amount too small (minimum 1 USDC)" },
+    { "code": 6011, "name": "CreationAmountTooSmall", "msg": "Market creation amount too small (minimum 1 SOL)" },
     { "code": 6012, "name": "InvalidSideIndex", "msg": "Invalid side index" },
-    { "code": 6013, "name": "TooManySides", "msg": "Too many sides (maximum 10)" },
-    { "code": 6014, "name": "TooFewSides", "msg": "Too few sides (minimum 2)" },
-    { "code": 6015, "name": "SideNameTooLong", "msg": "Side name is too long (max 50 characters)" },
-    { "code": 6016, "name": "DuplicateSideName", "msg": "Duplicate side names not allowed" },
-    { "code": 6017, "name": "UnauthorizedResolver", "msg": "Only market creator can resolve" },
-    { "code": 6018, "name": "InvalidTokenAccount", "msg": "Invalid token account" },
-    { "code": 6019, "name": "InsufficientBalance", "msg": "Insufficient token balance" }
+    { "code": 6013, "name": "InvalidSideCount", "msg": "Invalid number of sides (must be 2-10)" },
+    { "code": 6014, "name": "SideNameTooLong", "msg": "Side name is too long (max 50 characters)" },
+    { "code": 6015, "name": "DuplicateSideName", "msg": "Duplicate side names not allowed" },
+    { "code": 6016, "name": "UnauthorizedResolver", "msg": "Only market creator can resolve" }
   ],
   "types": [
     {
