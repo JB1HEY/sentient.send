@@ -4,8 +4,14 @@ use crate::state::*;
 use crate::error::ErrorCode;
 
 pub fn handler(ctx: Context<ClaimWinnings>) -> Result<()> {
-    let market = &ctx.accounts.market;
+    let market = &mut ctx.accounts.market;
     let position = &mut ctx.accounts.position;
+    let clock = Clock::get()?;
+
+    // Auto-resolve market if needed
+    if market.should_resolve(clock.unix_timestamp) {
+        market.auto_resolve();
+    }
 
     // Validation
     require!(market.resolved, ErrorCode::MarketNotEnded);
@@ -13,11 +19,12 @@ pub fn handler(ctx: Context<ClaimWinnings>) -> Result<()> {
 
     // Calculate payout (only winners get paid)
     let user_bet = position.get_bet(market.winning_side_index);
-    let payout = market.calculate_payout(market.winning_side_index, user_bet.amount);
+    let user_bet_amount = user_bet.amount; // Copy the amount value
+    let payout = market.calculate_payout(market.winning_side_index, user_bet_amount);
 
     require!(payout > 0, ErrorCode::NoWinnings);
 
-    // Transfer from vault to user using PDA signer
+    // Transfer from vault to user using vault PDA as authority
     let market_key = market.key();
     let seeds = &[
         b"vault",
@@ -32,7 +39,7 @@ pub fn handler(ctx: Context<ClaimWinnings>) -> Result<()> {
             Transfer {
                 from: ctx.accounts.market_vault.to_account_info(),
                 to: ctx.accounts.user_token_account.to_account_info(),
-                authority: ctx.accounts.market.to_account_info(),
+                authority: ctx.accounts.market_vault.to_account_info(),
             },
             signer_seeds,
         ),
@@ -43,7 +50,7 @@ pub fn handler(ctx: Context<ClaimWinnings>) -> Result<()> {
     position.claimed = true;
 
     msg!("Winnings claimed: {} USDC", payout);
-    msg!("User had {} USDC on winning side", user_bet.amount);
+    msg!("User had {} USDC on winning side", user_bet_amount);
 
     Ok(())
 }

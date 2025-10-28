@@ -20,8 +20,13 @@ A completely redesigned Sentiment market smart contract on Solana where **multip
    - 100% to fee pool
 - **Each Bet**: 2% fee
   - 100% to fee pool
-- At the end of the market, Pool is distributed 50% to market creater and 50% to 
-  protocol
+- **At Market End**: Fee pool distributed 50% to creator, 50% to protocol
+
+### Auto-Resolution
+- Markets automatically resolve when someone interacts after end time
+- No manual resolution needed by creator
+- Winner = side with most USDC
+- Fees distributed at resolution time
 
 ### Fixed Sides
 - Sides are set at market creation
@@ -34,18 +39,18 @@ A completely redesigned Sentiment market smart contract on Solana where **multip
 Market Creation
 ├─ Creator sets: Question, Description, End Time, Side Names
 ├─ Creator deposits: Minimum 150 USDC
-├─ Fee taken: 2% (split 50/50)
+├─ Fee taken: 2% (to fee pool)
 └─ Sides initialized with 0 balance
 
 Betting Phase
 ├─ Users bet 1-200 USDC on any side
-├─ Fee taken: 2% per bet (split 50/50)
+├─ Fee taken: 2% per bet (to fee pool)
 ├─ Bet amount (minus fee) added to that side's total
 └─ Continue until end_timestamp
 
-Market Resolution
-├─ Only creator can resolve after end_timestamp
-├─ Winning side = side with most USDC
+Auto-Resolution (triggered on first interaction after end_timestamp)
+├─ Automatically determines winning side (most USDC)
+├─ Splits fee pool: 50% creator, 50% protocol
 ├─ Total pool = sum of all bets (minus fees)
 └─ Market marked as resolved
 
@@ -54,6 +59,12 @@ Claiming Phase
 ├─ Payout = (your_bet / winning_side_total) × total_pool
 ├─ Proportional to your share of winning side
 └─ One-time claim per user
+
+Fee Withdrawal
+├─ Can only withdraw AFTER market is resolved
+├─ Creator withdraws their 50% share
+├─ Protocol withdraws their 50% share
+└─ One-time withdrawal per party
 ```
 
 ## 🏗️ Account Structure
@@ -70,8 +81,9 @@ pub struct Market {
     pub total_pool: u64,                    // Total USDC to distribute
     pub num_sides: u8,                      // Number of sides (2-10)
     pub sides: [Side; 10],                  // Array of sides
-    pub creator_fees_collected: u64,        // Fees for creator
-    pub protocol_fees_collected: u64,       // Fees for protocol
+    pub fee_pool: u64,                      // Accumulated fees (before distribution)
+    pub creator_fees_distributed: u64,      // Creator's share (after resolution)
+    pub protocol_fees_distributed: u64,     // Protocol's share (after resolution)
     pub total_volume: u64,                  // All-time volume
     pub num_bettors: u32,                   // Unique bettors
     pub creation_amount: u64,               // Initial deposit
@@ -109,8 +121,8 @@ pub struct UserPosition {
 ```rust
 pub struct Treasury {
     pub authority: Pubkey,              // Protocol authority
-    pub total_protocol_fees: u64,       // All protocol fees
-    pub total_creator_fees: u64,        // All creator fees
+    pub total_protocol_fees: u64,       // All protocol fees withdrawn
+    pub total_creator_fees: u64,        // All creator fees withdrawn
     pub total_markets: u32,             // Markets created
     pub total_volume: u64,              // All-time volume
     pub bump: u8,                       // PDA bump
@@ -131,7 +143,7 @@ pub fn create_market(
     description: String,           // Additional context
     end_timestamp: i64,            // Unix timestamp when market ends
     side_names: Vec<String>,       // ["Kanye West", "Taylor Swift", "Travis Scott"]
-    initial_amount: u64,           // Minimum 1 USDC (in lamports: 1_000_000)
+    initial_amount: u64,           // Minimum 150 USDC (in lamports: 150_000_000)
 ) -> Result<()>
 ```
 
@@ -140,13 +152,11 @@ pub fn create_market(
 - Description ≤ 500 characters
 - 2-10 unique side names
 - Each side name ≤ 50 characters
-- Initial amount ≥ 1 USDC
+- Initial amount ≥ 150 USDC
 - End timestamp in future
 
 **Fees:**
-- 2% of initial_amount
-- 1% to creator 
-- 1% to protocol
+- 2% of initial_amount goes to fee pool
 
 **Accounts:**
 - `market` - Market PDA (initialized)
@@ -176,9 +186,10 @@ pub fn place_bet(
 - Valid side_index
 
 **Fees:**
-- 2% of amount
-- 1% to creator (accumulated)
-- 1% to protocol (accumulated)
+- 2% of amount goes to fee pool
+
+**Auto-Resolution:**
+- If market has ended, automatically resolves before rejecting bet
 
 **Accounts:**
 - `market` - Market account
@@ -189,30 +200,7 @@ pub fn place_bet(
 - `token_program` - SPL Token program
 - `system_program` - System program
 
-### 3. resolve_market
-Determine the winning side (creator only).
-
-```rust
-pub fn resolve_market(
-    ctx: Context<ResolveMarket>,
-) -> Result<()>
-```
-
-**Requirements:**
-- Market ended (past end_timestamp)
-- Not already resolved
-- Called by market creator
-
-**Logic:**
-- Finds side with highest total_amount
-- Sets winning_side_index
-- Marks market as resolved
-
-**Accounts:**
-- `market` - Market account
-- `resolver` - Market creator (signer)
-
-### 4. claim_winnings
+### 3. claim_winnings
 Claim your share if you won.
 
 ```rust
@@ -222,9 +210,12 @@ pub fn claim_winnings(
 ```
 
 **Requirements:**
-- Market resolved
+- Market resolved (or auto-resolves if past end time)
 - Haven't claimed yet
 - Bet on winning side
+
+**Auto-Resolution:**
+- Automatically resolves market if past end_timestamp
 
 **Payout Formula:**
 ```
@@ -239,8 +230,8 @@ payout = (your_bet_on_winning_side / total_winning_side) × total_pool
 - `user` - Signer
 - `token_program` - SPL Token program
 
-### 5. withdraw_creator_fees
-Withdraw accumulated creator fees.
+### 4. withdraw_creator_fees
+Withdraw creator's share of fees (only after resolution).
 
 ```rust
 pub fn withdraw_creator_fees(
@@ -249,18 +240,23 @@ pub fn withdraw_creator_fees(
 ```
 
 **Requirements:**
+- Market must be resolved
 - Called by market creator
-- Fees available
+- Fees available (50% of fee pool)
+
+**Auto-Resolution:**
+- Automatically resolves market if past end_timestamp
 
 **Accounts:**
 - `market` - Market account
 - `market_vault` - Market's USDC vault
+- `treasury` - Treasury account
 - `creator_token_account` - Creator's USDC account
 - `creator` - Signer
 - `token_program` - SPL Token program
 
-### 6. withdraw_protocol_fees
-Withdraw protocol fees (admin only).
+### 5. withdraw_protocol_fees
+Withdraw protocol's share of fees (admin only, only after resolution).
 
 ```rust
 pub fn withdraw_protocol_fees(
@@ -269,8 +265,12 @@ pub fn withdraw_protocol_fees(
 ```
 
 **Requirements:**
+- Market must be resolved
 - Called by protocol authority
-- Fees available
+- Fees available (50% of fee pool)
+
+**Auto-Resolution:**
+- Automatically resolves market if past end_timestamp
 
 **Accounts:**
 - `market` - Market account
@@ -285,60 +285,65 @@ pub fn withdraw_protocol_fees(
 **Market:** "Who is the best artist?"
 - Sides: Kanye West, Taylor Swift, Travis Scott
 - End: December 31, 2024
+- Initial: 150 USDC (2% fee = 3 USDC to fee pool, 147 USDC to pool)
 
 **Betting Phase:**
 ```
 Alice bets 100 USDC on Kanye
-  ├─ Fee: 2 USDC
+  ├─ Fee: 2 USDC (to fee pool)
   └─ Kanye total: 98 USDC
 
 Bob bets 50 USDC on Taylor
-  ├─ Fee: 1 USDC
+  ├─ Fee: 1 USDC (to fee pool)
   └─ Taylor total: 49 USDC
 
 Charlie bets 150 USDC on Kanye
-  ├─ Fee: 2.5 USDC
-  └─ Kanye total: 246.25 USDC (98.5 + 147.75)
+  ├─ Fee: 3 USDC (to fee pool)
+  └─ Kanye total: 245 USDC (98 + 147)
 
 Dave bets 80 USDC on Travis
-  ├─ Fee: 1.2 USDC
-  └─ Travis total: 78.8 USDC
+  ├─ Fee: 1.6 USDC (to fee pool)
+  └─ Travis total: 78.4 USDC
 ```
 
 **Final Totals:**
-- Kanye: 246.25 USDC (WINNER - most money)
-- Taylor: 49.25 USDC
-- Travis: 78.8 USDC
-- Total Pool: 374.3 USDC
+- Kanye: 245 USDC (WINNER - most money)
+- Taylor: 49 USDC
+- Travis: 78.4 USDC
+- Total Pool: 372.4 USDC
+- Fee Pool: 10.6 USDC
 
-**Resolution:**
-- Creator resolves market
-- Kanye is declared winner
+**Auto-Resolution (first person to interact after Dec 31):**
+- System determines Kanye is winner (most USDC)
+- Fee pool split: 5.3 USDC to creator, 5.3 USDC to protocol
+- Market marked as resolved
 
 **Payouts:**
-- Alice (bet 98.5 on Kanye):
+- Alice (bet 98 on Kanye):
   ```
-  (98.5 / 246.25) × 374.3 = 149.7 USDC
-  Profit: 49.7 USDC (49.7% return)
+  (98 / 245) × 372.4 = 148.9 USDC
+  Profit: 48.9 USDC (49.9% return)
   ```
-- Charlie (bet 147.75 on Kanye):
+- Charlie (bet 147 on Kanye):
   ```
-  (147.75 / 246.25) × 374.3 = 224.6 USDC
-  Profit: 74.6 USDC (49.7% return)
+  (147 / 245) × 372.4 = 223.5 USDC
+  Profit: 73.5 USDC (49.9% return)
   ```
 - Bob (bet on Taylor): 0 USDC (lost)
 - Dave (bet on Travis): 0 USDC (lost)
 
-**Fees Collected:**
-- Creator: 2.625 USDC (can withdraw anytime)
-- Protocol: 2.625 USDC (can withdraw anytime)
+**Fee Withdrawals (after resolution):**
+- Creator withdraws: 5.3 USDC
+- Protocol withdraws: 5.3 USDC
 
 ## 🔒 Security Features
 
 - ✅ All funds in program-controlled vault
-- ✅ Only creator can resolve
+- ✅ Auto-resolution prevents manipulation
 - ✅ Time-locked claiming (after resolution)
+- ✅ Fee withdrawal only after resolution
 - ✅ Anti-double-claim protection
+- ✅ Anti-double-withdrawal protection
 - ✅ PDA-based access control
 - ✅ Checked arithmetic (overflow protection)
 - ✅ Token account validation
@@ -362,7 +367,6 @@ programs/prediction-market/src/
     ├── mod.rs
     ├── create_market.rs
     ├── place_bet.rs
-    ├── resolve_market.rs
     ├── claim_winnings.rs
     └── withdraw_fees.rs
 ```
@@ -388,7 +392,7 @@ await program.methods
     "Vote with your wallet",
     new BN(Date.now() / 1000 + 86400), // 24 hours
     ["Kanye West", "Taylor Swift", "Travis Scott"],
-    new BN(1_000_000) // 1 USDC
+    new BN(150_000_000) // 150 USDC
   )
   .accounts({...})
   .rpc();
@@ -399,15 +403,15 @@ await program.methods
   .accounts({...})
   .rpc();
 
-// Resolve (after market ends)
+// Wait for market to end, then claim (auto-resolves)
 await program.methods
-  .resolveMarket()
+  .claimWinnings()
   .accounts({...})
   .rpc();
 
-// Claim winnings
+// Withdraw fees (only after resolution)
 await program.methods
-  .claimWinnings()
+  .withdrawCreatorFees()
   .accounts({...})
   .rpc();
 ```
@@ -418,35 +422,57 @@ await program.methods
    - Devnet: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`
    - Mainnet: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
 
-2. **Fee Withdrawals:** Need to wait for market to end
+2. **Auto-Resolution:** Market automatically resolves on first interaction after end_timestamp (could be claim, bet attempt, or fee withdrawal)
 
-3. **Losers:** Get nothing. Winner-takes-all model.
+3. **Fee Timing:** Fees can ONLY be withdrawn AFTER market is resolved
 
-4. **Multiple Bets:** Users can bet on multiple sides (hedging allowed)
+4. **Losers:** Get nothing. Winner-takes-all model.
 
-5. **No AMM:** Prices don't adjust. Simple tracking of total per side.
+5. **Multiple Bets:** Users can bet on multiple sides (hedging allowed)
+
+6. **No Manual Resolution:** Creator doesn't need to do anything - market resolves automatically
 
 ## 🚀 Deployment Checklist
 
 - [ ] Update `declare_id!` in lib.rs with your program ID
 - [ ] Test on devnet with test USDC
 - [ ] Verify all fee calculations
-- [ ] Test winner determination logic
+- [ ] Test auto-resolution logic
 - [ ] Test claim payouts
+- [ ] Test fee withdrawal restrictions
 - [ ] Audit before mainnet
 
-## 📚 Key Differences from Old Contract
+## 📚 Key Differences from Traditional Markets
 
-| Feature | Old (Sentiment) | New (Winner-Takes-All) |
-|---------|----------------|------------------------|
+| Feature | Traditional | This Contract |
+|---------|-------------|---------------|
 | Sides | 2 (YES/NO) | 2-10 (custom names) |
 | Payout | Everyone proportional | Winners only |
 | Currency | SOL | USDC |
-| Pricing | AMM (dynamic) | None (just tracking) |
-| Resolution | Automatic | Creator resolves |
-| Bet Limits | 0.01+ SOL | 1-200 USDC |
-| Fees | 2% on bets | 1.5% on bets, 2% on creation |
+| Resolution | Manual by creator | Automatic by contract |
+| Fee Distribution | During trading | After resolution |
+| Bet Limits | Varies | 1-200 USDC |
+| Creation Fee | Varies | 2% (to fee pool) |
+| Bet Fee | Varies | 2% (to fee pool) |
+| Fee Split | Varies | 50/50 creator/protocol |
+
+## 🎯 Auto-Resolution Behavior
+
+The market automatically resolves when anyone tries to interact with it after the `end_timestamp`. This includes:
+
+1. **During place_bet**: If someone tries to bet after the market ended, it auto-resolves then rejects the bet
+2. **During claim_winnings**: First claimer after end time triggers resolution
+3. **During withdraw_creator_fees**: Creator's withdrawal attempt triggers resolution
+4. **During withdraw_protocol_fees**: Protocol's withdrawal attempt triggers resolution
+
+The auto-resolution:
+- Determines the winning side (side with most USDC)
+- Splits the fee pool 50/50 between creator and protocol
+- Marks the market as resolved
+- Prevents any further bets
+
+This ensures markets always resolve fairly based on which side attracted the most capital, with no possibility of creator manipulation.
 
 ---
 
-**This is a complete rewrite. Use this contract for the multi-side winner-takes-all model you described.**
+**This is a winner-takes-all market with automatic resolution. The side with the most USDC wins everything.**

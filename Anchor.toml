@@ -18,8 +18,14 @@ prediction_market = "8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[test]
+startup_wait = 5000
+
+[test.validator]
+reset = true

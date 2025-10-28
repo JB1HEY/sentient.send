@@ -33,11 +33,9 @@ pub fn handler(
         }
     }
 
-    // Calculate fees (2% of initial amount, split 50/50)
-    let total_fee = (initial_amount * CREATION_FEE_BPS) / 10000;
-    let creator_fee = total_fee / 2;
-    let protocol_fee = total_fee / 2;
-    let amount_to_pool = initial_amount - total_fee;
+    // Calculate fees (2% of initial amount, 100% goes to fee pool)
+    let creation_fee = (initial_amount * CREATION_FEE_BPS) / 10000;
+    let amount_to_pool = initial_amount - creation_fee;
 
     // Transfer USDC from creator to market vault
     token::transfer(
@@ -61,8 +59,9 @@ pub fn handler(
     market.winning_side_index = 0;
     market.total_pool = amount_to_pool;
     market.num_sides = side_names.len() as u8;
-    market.creator_fees_collected = creator_fee;
-    market.protocol_fees_collected = protocol_fee;
+    market.fee_pool = creation_fee; // All creation fees go to fee pool
+    market.creator_fees_distributed = 0; // Will be set at resolution
+    market.protocol_fees_distributed = 0; // Will be set at resolution
     market.total_volume = initial_amount;
     market.num_bettors = 0;
     market.creation_amount = initial_amount;
@@ -73,15 +72,12 @@ pub fn handler(
         market.sides[i] = Side::new(side_name)?;
     }
 
-    // Update treasury
-    treasury.total_creator_fees = treasury.total_creator_fees
-        .checked_add(creator_fee)
-        .ok_or(ErrorCode::MathOverflow)?;
-    treasury.total_protocol_fees = treasury.total_protocol_fees
-        .checked_add(protocol_fee)
-        .ok_or(ErrorCode::MathOverflow)?;
+    // Update treasury (must already exist)
     treasury.total_markets = treasury.total_markets
         .checked_add(1)
+        .ok_or(ErrorCode::MathOverflow)?;
+    treasury.total_volume = treasury.total_volume
+        .checked_add(initial_amount)
         .ok_or(ErrorCode::MathOverflow)?;
 
     msg!("Market created: {}", market.question);
@@ -90,8 +86,8 @@ pub fn handler(
         msg!("  Side {}: {}", i, market.sides[i as usize].get_name());
     }
     msg!("Initial pool: {} USDC", amount_to_pool);
-    msg!("Creator fee: {} USDC", creator_fee);
-    msg!("Protocol fee: {} USDC", protocol_fee);
+    msg!("Creation fee (to fee pool): {} USDC", creation_fee);
+    msg!("Fees will be distributed 50/50 at market resolution");
 
     Ok(())
 }
@@ -121,16 +117,14 @@ pub struct CreateMarket<'info> {
         seeds = [b"vault", market.key().as_ref()],
         bump,
         token::mint = usdc_mint,
-        token::authority = market,
+        token::authority = market_vault,
     )]
     pub market_vault: Account<'info, TokenAccount>,
 
     #[account(
-        init_if_needed,
-        payer = creator,
-        space = Treasury::LEN,
+        mut,
         seeds = [b"treasury"],
-        bump
+        bump = treasury.bump
     )]
     pub treasury: Account<'info, Treasury>,
 

@@ -12,17 +12,22 @@ pub fn handler(
     let position = &mut ctx.accounts.position;
     let clock = Clock::get()?;
 
+    // Check if market should auto-resolve before allowing bet
+    if market.should_resolve(clock.unix_timestamp) {
+        // Market has ended - reject the bet
+        // Note: Auto-resolution will happen when someone calls claim or withdraw
+        return Err(ErrorCode::MarketEnded.into());
+    }
+
     // Validation
     require!(market.is_active(clock.unix_timestamp), ErrorCode::MarketEnded);
     require!(amount >= MIN_BET, ErrorCode::BetTooSmall);
     require!(amount <= MAX_BET, ErrorCode::BetTooLarge);
     require!(side_index < market.num_sides, ErrorCode::InvalidSideIndex);
 
-    // Calculate fees (1.5% of bet, split 50/50)
-    let total_fee = (amount * BET_FEE_BPS) / 10000;
-    let creator_fee = total_fee / 2;
-    let protocol_fee = total_fee / 2;
-    let amount_to_pool = amount - total_fee;
+    // Calculate fees (2% of bet, 100% goes to fee pool)
+    let bet_fee = (amount * BET_FEE_BPS) / 10000;
+    let amount_to_pool = amount - bet_fee;
 
     // Transfer USDC from user to market vault
     token::transfer(
@@ -37,18 +42,29 @@ pub fn handler(
         amount,
     )?;
 
-    // Update market
-    let side = market.get_side_mut(side_index).unwrap();
+    // Check if this is a new bettor
+    let is_new_bettor = !position.has_any_bets();
     let is_first_bet_on_side = position.get_bet(side_index).amount == 0;
-    side.add_bet(amount_to_pool, is_first_bet_on_side);
-    
+
+    // Update market side and get info for logging
+    let (side_name, new_side_total) = {
+        let side = market.get_side_mut(side_index).unwrap();
+        let side_name = side.get_name();
+        side.add_bet(amount_to_pool, is_first_bet_on_side);
+        let new_side_total = side.total_amount;
+        (side_name, new_side_total)
+    }; // side borrow ends here
+
+    // Update market totals
     market.total_pool += amount_to_pool;
-    market.creator_fees_collected += creator_fee;
-    market.protocol_fees_collected += protocol_fee;
+    market.fee_pool += bet_fee;
     market.total_volume += amount;
+    
+    if is_new_bettor {
+        market.num_bettors += 1;
+    }
 
     // Update position
-    let is_new_bettor = !position.has_any_bets();
     if position.user == Pubkey::default() {
         position.user = ctx.accounts.user.key();
         position.market = market.key();
@@ -57,16 +73,12 @@ pub fn handler(
     }
     
     position.add_bet(side_index, amount_to_pool);
-    
-    if is_new_bettor {
-        market.num_bettors += 1;
-    }
 
-    msg!("Bet placed on side: {}", side.get_name());
+    msg!("Bet placed on side: {}", side_name);
     msg!("Amount: {} USDC", amount_to_pool);
-    msg!("Side total now: {} USDC", side.total_amount);
-    msg!("Creator fee: {} USDC", creator_fee);
-    msg!("Protocol fee: {} USDC", protocol_fee);
+    msg!("Side total now: {} USDC", new_side_total);
+    msg!("Bet fee (to fee pool): {} USDC", bet_fee);
+    msg!("Total fee pool: {} USDC", market.fee_pool);
 
     Ok(())
 }

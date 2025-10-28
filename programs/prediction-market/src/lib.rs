@@ -6,11 +6,16 @@ pub mod instructions;
 
 use instructions::*;
 
-declare_id!("YOUR_PROGRAM_ID_HERE");
+declare_id!("2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ");
 
 #[program]
 pub mod prediction_market {
     use super::*;
+
+    /// Initialize the global treasury (call once)
+    pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
+        instructions::initialize_treasury::handler(ctx)
+    }
 
     /// Create a new multi-side prediction market
     pub fn create_market(
@@ -40,22 +45,18 @@ pub mod prediction_market {
         instructions::place_bet::handler(ctx, side_index, amount)
     }
 
-    /// Resolve the market (determine winner)
-    pub fn resolve_market(ctx: Context<ResolveMarket>) -> Result<()> {
-        instructions::resolve_market::handler(ctx)
-    }
-
     /// Claim winnings if you bet on the winning side
+    /// Market will auto-resolve if not already resolved
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
         instructions::claim_winnings::handler(ctx)
     }
 
-    /// Withdraw accumulated creator fees
+    /// Withdraw accumulated creator fees (only after market is resolved)
     pub fn withdraw_creator_fees(ctx: Context<WithdrawCreatorFees>) -> Result<()> {
         instructions::withdraw_fees::withdraw_creator_fees(ctx)
     }
 
-    /// Withdraw accumulated protocol fees (admin only)
+    /// Withdraw accumulated protocol fees (admin only, only after market is resolved)
     pub fn withdraw_protocol_fees(ctx: Context<WithdrawProtocolFees>) -> Result<()> {
         instructions::withdraw_fees::withdraw_protocol_fees(ctx)
     }

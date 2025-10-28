@@ -12,11 +12,11 @@ pub const MIN_BET: u64 = 1_000_000; // 1 USDC
 /// Maximum bet amount in USDC (200 USDC)
 pub const MAX_BET: u64 = 200_000_000; // 200 USDC
 
-/// Minimum market creation amount (1 SOL worth of USDC)
-pub const MIN_MARKET_CREATION: u64 = 1_000_000; // 1 USDC minimum
+/// Minimum market creation amount (150 USDC)
+pub const MIN_MARKET_CREATION: u64 = 150_000_000; // 150 USDC minimum
 
-/// Bet fee in basis points (1.5% = 150 basis points)
-pub const BET_FEE_BPS: u64 = 150;
+/// Bet fee in basis points (2% = 200 basis points)
+pub const BET_FEE_BPS: u64 = 200;
 
 /// Market creation fee in basis points (2% = 200 basis points)
 pub const CREATION_FEE_BPS: u64 = 200;
@@ -30,11 +30,12 @@ pub struct Market {
     pub end_timestamp: i64,                 // When market ends
     pub resolved: bool,                     // Has market been resolved?
     pub winning_side_index: u8,             // Index of winning side (if resolved)
-    pub total_pool: u64,                    // Total USDC in the pool
+    pub total_pool: u64,                    // Total USDC in the pool (before fee distribution)
     pub num_sides: u8,                      // Number of sides in this market
     pub sides: [Side; MAX_SIDES],           // Array of sides
-    pub creator_fees_collected: u64,        // Total fees for creator
-    pub protocol_fees_collected: u64,       // Total fees for protocol
+    pub fee_pool: u64,                      // Accumulated fees (distributed at resolution)
+    pub creator_fees_distributed: u64,      // Fees given to creator (after resolution)
+    pub protocol_fees_distributed: u64,     // Fees given to protocol (after resolution)
     pub total_volume: u64,                  // Total volume traded
     pub num_bettors: u32,                   // Unique bettors
     pub creation_amount: u64,               // Initial USDC put in by creator
@@ -44,14 +45,19 @@ pub struct Market {
 impl Market {
     // 8 (discriminator) + 32 (creator) + 4+200 (question) + 4+500 (description)
     // + 8 (timestamp) + 1 (resolved) + 1 (winning_side) + 8 (total_pool)
-    // + 1 (num_sides) + (MAX_SIDES * Side::LEN) + 8+8 (fees) + 8 (volume)
-    // + 4 (num_bettors) + 8 (creation_amount) + 1 (bump)
+    // + 1 (num_sides) + (MAX_SIDES * Side::LEN) + 8 (fee_pool) + 8+8 (fees_distributed)
+    // + 8 (volume) + 4 (num_bettors) + 8 (creation_amount) + 1 (bump)
     pub const LEN: usize = 8 + 32 + 204 + 504 + 8 + 1 + 1 + 8 + 1 
-        + (MAX_SIDES * Side::LEN) + 16 + 8 + 4 + 8 + 1;
+        + (MAX_SIDES * Side::LEN) + 8 + 16 + 8 + 4 + 8 + 1;
 
     /// Check if market is still active (before end time)
     pub fn is_active(&self, current_timestamp: i64) -> bool {
         !self.resolved && current_timestamp < self.end_timestamp
+    }
+
+    /// Check if market should auto-resolve (past end time but not yet resolved)
+    pub fn should_resolve(&self, current_timestamp: i64) -> bool {
+        !self.resolved && current_timestamp >= self.end_timestamp
     }
 
     /// Get side by index
@@ -86,6 +92,21 @@ impl Market {
         }
 
         winning_index
+    }
+
+    /// Auto-resolve market and distribute fees (50/50 split)
+    pub fn auto_resolve(&mut self) {
+        if self.resolved {
+            return;
+        }
+
+        self.winning_side_index = self.determine_winner();
+        self.resolved = true;
+
+        // Split fee pool 50/50 between creator and protocol
+        let half_fees = self.fee_pool / 2;
+        self.creator_fees_distributed = half_fees;
+        self.protocol_fees_distributed = self.fee_pool - half_fees; // Handle odd amounts
     }
 
     /// Calculate payout for a user on a specific side
@@ -186,13 +207,12 @@ impl UserPosition {
 
     /// Add a bet to a side
     pub fn add_bet(&mut self, side_index: u8, amount: u64) {
-        let bet = self.get_bet_mut(side_index);
-        let is_first_bet = bet.amount == 0;
-        bet.amount += amount;
+        let is_first_bet = self.bets[side_index as usize].amount == 0;
+        self.bets[side_index as usize].amount += amount;
         self.total_invested += amount;
         
         if is_first_bet {
-            bet.has_bet = true;
+            self.bets[side_index as usize].has_bet = true;
         }
     }
 
