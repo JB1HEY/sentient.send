@@ -1,175 +1,119 @@
-# Solana Sentiment-Based Prediction Market
+# Multi-Side Winner-Takes-All Sentiment Market
 
-A fully decentralized, sentiment-driven prediction market on Solana. Unlike traditional prediction markets that require manual resolution, this protocol distributes **proportional payouts** based on the final pool sentiment when the market ends.
+A completely redesigned Sentiment market smart contract on Solana where **multiple sides compete** and the **winning side takes the entire pool**.
 
-## 🎯 Key Innovation
+## 🎯 Key Features
 
-**No Manual Resolution Required!**
+### Winner-Takes-All Model
+- Multiple sides (2-10 options per market)
+- The side with the most USDC at the end wins
+- Winning side splits the entire pool proportionally
+- Losers get nothing
 
-Traditional prediction markets have a binary winner/loser outcome. This market uses **proportional payouts** where:
-- Everyone gets paid based on their share of their pool
-- The side with higher sentiment (larger final pool) gets more per share
-- No one loses everything - fair distribution based on market sentiment
-- Perfect for meme markets, subjective questions, and community sentiment
+### USDC-Based
+- All bets in USDC (1-200 USDC per bet)
+- Market creation requires minimum 150 USDC
+- No SOL needed (except for transaction fees)
 
-## 📊 Live Demo
+### Fair Fee Structure
+- **Market Creation**: 2% fee
+   - 100% to fee pool
+- **Each Bet**: 2% fee
+  - 100% to fee pool
+- At the end of the market, Pool is distributed 50% to market creater and 50% to 
+  protocol
 
-- **Program ID**: `2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ` (Localnet)
-- **Anchor Version**: 0.32.1
-- **Solana Version**: 2.2.20
+### Fixed Sides
+- Sides are set at market creation
+- Cannot add/remove sides after creation
+- Example: "Best Artist" → Kanye West, Taylor Swift, Travis Scott
 
-## 🏗️ Architecture
-
-### Smart Contract Features
-- ✅ Permissionless market creation (0.1 SOL fee)
-- ✅ Automated Market Maker (AMM) for dynamic pricing
-- ✅ Proportional sentiment-based payouts
-- ✅ 2% platform fee on all bets
-- ✅ Fully decentralized escrow via PDAs
-- ✅ Support for adding liquidity
-
-### Technical Stack
-- **Framework**: Anchor 0.32.1
-- **Language**: Rust
-- **Blockchain**: Solana
-- **AMM Formula**: Constant Product (k = x × y)
-
-## 📁 Project Structure
+## 📊 Architecture
 
 ```
-prediction-market/
-├── Anchor.toml                 # Anchor configuration
-├── Cargo.toml                  # Workspace configuration
-├── package.json                # Node.js dependencies
-├── programs/
-│   └── prediction-market/
-│       ├── Cargo.toml          # Program dependencies
-│       └── src/
-│           ├── lib.rs          # Program entry point & instructions
-│           ├── state.rs        # Account structures
-│           ├── error.rs        # Error definitions
-│           └── instructions/
-│               ├── mod.rs              # Module exports
-│               ├── create_market.rs    # Create prediction market
-│               ├── place_bet.rs        # Place YES/NO bets
-│               ├── claim_winnings.rs   # Claim proportional payouts
-│               └── add_liquidity.rs    # Add market liquidity
-└── tests/
-    └── prediction-market.test.ts # Full test suite (7 tests)
+Market Creation
+├─ Creator sets: Question, Description, End Time, Side Names
+├─ Creator deposits: Minimum 150 USDC
+├─ Fee taken: 2% (split 50/50)
+└─ Sides initialized with 0 balance
+
+Betting Phase
+├─ Users bet 1-200 USDC on any side
+├─ Fee taken: 2% per bet (split 50/50)
+├─ Bet amount (minus fee) added to that side's total
+└─ Continue until end_timestamp
+
+Market Resolution
+├─ Only creator can resolve after end_timestamp
+├─ Winning side = side with most USDC
+├─ Total pool = sum of all bets (minus fees)
+└─ Market marked as resolved
+
+Claiming Phase
+├─ Only winners can claim
+├─ Payout = (your_bet / winning_side_total) × total_pool
+├─ Proportional to your share of winning side
+└─ One-time claim per user
 ```
 
-## 🚀 Quick Start
+## 🏗️ Account Structure
 
-### Prerequisites
-
-```bash
-# Check versions
-solana --version    # 2.2.20 or compatible
-anchor --version    # 0.32.1
-node --version      # 23.x
-rustc --version     # 1.82.0
-```
-
-### Installation
-
-```bash
-# Clone repository
-git clone <your-repo>
-cd prediction-market
-
-# Install dependencies
-npm install
-
-# Build program
-anchor build
-
-# Get program ID
-anchor keys list
-
-# Sync program IDs (updates Anchor.toml and lib.rs)
-anchor keys sync
-
-# Rebuild with correct IDs
-anchor build
-```
-
-### Local Testing
-
-```bash
-# Terminal 1 - Start local validator
-solana-test-validator
-
-# Terminal 2 - Run tests
-solana config set --url localhost
-anchor test --skip-local-validator
-```
-
-### Deploy to Devnet
-
-```bash
-# Configure for devnet
-solana config set --url devnet
-
-# Airdrop SOL
-solana airdrop 2
-
-# Deploy
-anchor deploy
-
-# Run tests on devnet
-anchor test
-```
-
-## 📊 Account Structures
-
-### Market Account
+### Market
 ```rust
 pub struct Market {
-    pub creator: Pubkey,           // Market creator
-    pub question: String,          // Question (max 200 chars)
-    pub description: String,       // Description (max 500 chars)
-    pub end_timestamp: i64,        // Market end time
-    pub resolved: bool,            // Has market ended?
-    pub outcome: bool,             // Final outcome
-    pub yes_pool: u64,            // SOL in YES pool
-    pub no_pool: u64,             // SOL in NO pool
-    pub k: u128,                  // AMM constant (yes_pool * no_pool)
-    pub total_yes_shares: u64,    // Total YES shares issued
-    pub total_no_shares: u64,     // Total NO shares issued
-    pub treasury_fee: u64,        // Accumulated platform fees
-    pub creation_fee: u64,        // Market creation fee paid
-    pub total_volume: u64,        // Total trading volume
-    pub num_bettors: u32,         // Unique bettors count
-    pub question_hash: [u8; 32],  // Question hash for PDA
-    pub bump: u8,                 // PDA bump seed
+    pub creator: Pubkey,                    // Who created it
+    pub question: String,                   // "Who is the best artist?"
+    pub description: String,                // Additional context
+    pub end_timestamp: i64,                 // When betting ends
+    pub resolved: bool,                     // Has it been resolved?
+    pub winning_side_index: u8,             // Which side won (0-9)
+    pub total_pool: u64,                    // Total USDC to distribute
+    pub num_sides: u8,                      // Number of sides (2-10)
+    pub sides: [Side; 10],                  // Array of sides
+    pub creator_fees_collected: u64,        // Fees for creator
+    pub protocol_fees_collected: u64,       // Fees for protocol
+    pub total_volume: u64,                  // All-time volume
+    pub num_bettors: u32,                   // Unique bettors
+    pub creation_amount: u64,               // Initial deposit
+    pub bump: u8,                           // PDA bump
 }
 ```
 
-**PDA**: `["market", creator, question_hash]`
+**PDA**: `["market", creator, question]`
 
-### UserPosition Account
+### Side
+```rust
+pub struct Side {
+    pub name: [u8; 50],         // Side name (e.g., "Kanye West")
+    pub name_len: u8,           // Actual length
+    pub total_amount: u64,      // Total USDC on this side
+    pub num_bettors: u32,       // Number of bettors
+}
+```
+
+### UserPosition
 ```rust
 pub struct UserPosition {
-    pub user: Pubkey,              // Position owner
-    pub market: Pubkey,            // Market reference
-    pub yes_shares: u64,           // YES shares owned
-    pub no_shares: u64,            // NO shares owned
-    pub amount_invested: u64,      // Total SOL invested
-    pub claimed: bool,             // Payout claimed?
-    pub bump: u8,                  // PDA bump seed
+    pub user: Pubkey,                   // User address
+    pub market: Pubkey,                 // Market reference
+    pub bets: [SideBet; 10],            // Bets on each side
+    pub total_invested: u64,            // Total USDC invested
+    pub claimed: bool,                  // Claimed winnings?
+    pub bump: u8,                       // PDA bump
 }
 ```
 
 **PDA**: `["position", market, user]`
 
-### Treasury Account
+### Treasury
 ```rust
 pub struct Treasury {
-    pub authority: Pubkey,         // Treasury authority
-    pub total_fees: u64,           // All-time fees
-    pub total_markets: u32,        // Markets created
-    pub total_volume: u64,         // All-time volume
-    pub bump: u8,                  // PDA bump seed
+    pub authority: Pubkey,              // Protocol authority
+    pub total_protocol_fees: u64,       // All protocol fees
+    pub total_creator_fees: u64,        // All creator fees
+    pub total_markets: u32,             // Markets created
+    pub total_volume: u64,              // All-time volume
+    pub bump: u8,                       // PDA bump
 }
 ```
 
@@ -178,318 +122,331 @@ pub struct Treasury {
 ## 🔧 Instructions
 
 ### 1. create_market
-Create a new prediction market.
+Create a new multi-side market.
 
-```typescript
-await program.methods
-  .createMarket(
-    "Will it rain tomorrow?",                    // question
-    "Weather prediction market",                 // description
-    new anchor.BN(Date.now() / 1000 + 86400),   // end_timestamp (24h)
-    new anchor.BN(1_000_000_000),               // initial_liquidity (1 SOL)
-    Array.from(questionSeed)                     // question_hash (SHA-256)
-  )
-  .accounts({
-    market: marketPda,
-    treasury: treasuryPda,
-    creator: creator.publicKey,
-    systemProgram: SystemProgram.programId,
-  })
-  .rpc();
+```rust
+pub fn create_market(
+    ctx: Context<CreateMarket>,
+    question: String,              // "Who is the best artist?"
+    description: String,           // Additional context
+    end_timestamp: i64,            // Unix timestamp when market ends
+    side_names: Vec<String>,       // ["Kanye West", "Taylor Swift", "Travis Scott"]
+    initial_amount: u64,           // Minimum 1 USDC (in lamports: 1_000_000)
+) -> Result<()>
 ```
 
 **Requirements:**
-- 0.1 SOL creation fee
-- Minimum 1 SOL initial liquidity
 - Question ≤ 200 characters
 - Description ≤ 500 characters
+- 2-10 unique side names
+- Each side name ≤ 50 characters
+- Initial amount ≥ 1 USDC
 - End timestamp in future
 
+**Fees:**
+- 2% of initial_amount
+- 1% to creator 
+- 1% to protocol
+
+**Accounts:**
+- `market` - Market PDA (initialized)
+- `market_vault` - Token account to hold USDC (initialized)
+- `treasury` - Treasury PDA (initialized if needed)
+- `creator_token_account` - Creator's USDC account
+- `usdc_mint` - USDC mint
+- `creator` - Signer
+- `token_program` - SPL Token program
+- `system_program` - System program
+- `rent` - Rent sysvar
+
 ### 2. place_bet
-Place a YES or NO bet.
+Bet on a specific side.
 
-```typescript
-await program.methods
-  .placeBet(
-    new anchor.BN(1_000_000_000),  // 1 SOL
-    true                            // true = YES, false = NO
-  )
-  .accounts({
-    market: marketPda,
-    position: userPositionPda,
-    user: user.publicKey,
-    systemProgram: SystemProgram.programId,
-  })
-  .rpc();
+```rust
+pub fn place_bet(
+    ctx: Context<PlaceBet>,
+    side_index: u8,                // Which side (0-9)
+    amount: u64,                   // 1-200 USDC (in lamports)
+) -> Result<()>
 ```
 
-**Mechanics:**
-- 2% platform fee deducted
-- Shares calculated via AMM
-- Pools updated automatically
-- Position created/updated
+**Requirements:**
+- Market not ended
+- Amount between 1-200 USDC
+- Valid side_index
 
-### 3. claim_winnings
-Claim proportional payout after market ends.
+**Fees:**
+- 2% of amount
+- 1% to creator (accumulated)
+- 1% to protocol (accumulated)
 
-```typescript
-await program.methods
-  .claimWinnings()
-  .accounts({
-    market: marketPda,
-    position: userPositionPda,
-    user: user.publicKey,
-    systemProgram: SystemProgram.programId,
-  })
-  .rpc();
+**Accounts:**
+- `market` - Market account
+- `market_vault` - Market's USDC vault
+- `position` - User position PDA (initialized if needed)
+- `user_token_account` - User's USDC account
+- `user` - Signer
+- `token_program` - SPL Token program
+- `system_program` - System program
+
+### 3. resolve_market
+Determine the winning side (creator only).
+
+```rust
+pub fn resolve_market(
+    ctx: Context<ResolveMarket>,
+) -> Result<()>
 ```
+
+**Requirements:**
+- Market ended (past end_timestamp)
+- Not already resolved
+- Called by market creator
+
+**Logic:**
+- Finds side with highest total_amount
+- Sets winning_side_index
+- Marks market as resolved
+
+**Accounts:**
+- `market` - Market account
+- `resolver` - Market creator (signer)
+
+### 4. claim_winnings
+Claim your share if you won.
+
+```rust
+pub fn claim_winnings(
+    ctx: Context<ClaimWinnings>,
+) -> Result<()>
+```
+
+**Requirements:**
+- Market resolved
+- Haven't claimed yet
+- Bet on winning side
 
 **Payout Formula:**
 ```
-YES payout = (yes_shares / total_yes_shares) × yes_pool_value
-NO payout = (no_shares / total_no_shares) × no_pool_value
-Total = YES payout + NO payout
+payout = (your_bet_on_winning_side / total_winning_side) × total_pool
 ```
 
-### 4. add_liquidity
-Add liquidity to deepen the market.
+**Accounts:**
+- `market` - Market account
+- `market_vault` - Market's USDC vault
+- `position` - User position
+- `user_token_account` - User's USDC account
+- `user` - Signer
+- `token_program` - SPL Token program
 
-```typescript
-await program.methods
-  .addLiquidity(new anchor.BN(1_000_000_000))  // 1 SOL
-  .accounts({
-    market: marketPda,
-    liquidityProvider: provider.publicKey,
-    systemProgram: SystemProgram.programId,
-  })
-  .rpc();
+### 5. withdraw_creator_fees
+Withdraw accumulated creator fees.
+
+```rust
+pub fn withdraw_creator_fees(
+    ctx: Context<WithdrawCreatorFees>,
+) -> Result<()>
 ```
 
-## 🧮 AMM Mechanics
+**Requirements:**
+- Called by market creator
+- Fees available
 
-### Constant Product Formula
-```
-k = yes_pool × no_pool (constant)
-```
+**Accounts:**
+- `market` - Market account
+- `market_vault` - Market's USDC vault
+- `creator_token_account` - Creator's USDC account
+- `creator` - Signer
+- `token_program` - SPL Token program
 
-### Price Calculation
-```
-YES price = no_pool / (yes_pool + no_pool)
-NO price = yes_pool / (yes_pool + no_pool)
-```
+### 6. withdraw_protocol_fees
+Withdraw protocol fees (admin only).
 
-### Share Calculation (Buying YES)
-```
-1. new_no_pool = current_no_pool + bet_amount
-2. new_yes_pool = k / new_no_pool
-3. shares_received = current_yes_pool - new_yes_pool
-```
-
-### Example Trade
-```
-Initial State:
-├─ YES pool: 1,000 SOL
-├─ NO pool: 1,000 SOL
-├─ k = 1,000,000
-└─ YES price = 50%
-
-User bets 100 SOL on YES (after 2% fee = 98 SOL):
-├─ New NO pool = 1,098 SOL
-├─ New YES pool = 1,000,000 / 1,098 = 911 SOL
-├─ Shares received = 1,000 - 911 = 89 shares
-└─ New YES price = 1,098 / 2,009 = 54.7%
+```rust
+pub fn withdraw_protocol_fees(
+    ctx: Context<WithdrawProtocolFees>,
+) -> Result<()>
 ```
 
-## 💰 Proportional Payout Model
+**Requirements:**
+- Called by protocol authority
+- Fees available
 
-### How It Works
+**Accounts:**
+- `market` - Market account
+- `market_vault` - Market's USDC vault
+- `treasury` - Treasury account
+- `protocol_token_account` - Protocol's USDC account
+- `protocol_authority` - Signer
+- `token_program` - SPL Token program
 
-Unlike traditional markets where losers get nothing, **everyone gets paid**:
+## 💰 Example Scenario
 
-1. **Market Ends**: Trading stops at `end_timestamp`
-2. **Final Sentiment**: Pools reflect community sentiment
-3. **Proportional Distribution**:
-   - Each YES share gets: `yes_pool_value / total_yes_shares`
-   - Each NO share gets: `no_pool_value / total_no_shares`
+**Market:** "Who is the best artist?"
+- Sides: Kanye West, Taylor Swift, Travis Scott
+- End: December 31, 2024
 
-### Example Payout
-
-**Final Market State:**
+**Betting Phase:**
 ```
-├─ YES pool: 3,000 SOL (60% sentiment)
-├─ NO pool: 2,000 SOL (40% sentiment)
-├─ Total YES shares: 2,500
-└─ Total NO shares: 1,800
-```
+Alice bets 100 USDC on Kanye
+  ├─ Fee: 2 USDC
+  └─ Kanye total: 98 USDC
 
-**Alice's Position (YES bettor):**
-```
-├─ Owns: 500 YES shares
-├─ YES pool value per share: 3,000 / 2,500 = 1.2 SOL
-├─ Payout: 500 × 1.2 = 600 SOL
-└─ Result: 20% profit (if invested 500 SOL)
-```
+Bob bets 50 USDC on Taylor
+  ├─ Fee: 1 USDC
+  └─ Taylor total: 49 USDC
 
-**Bob's Position (NO bettor):**
-```
-├─ Owns: 450 NO shares
-├─ NO pool value per share: 2,000 / 1,800 = 1.11 SOL
-├─ Payout: 450 × 1.11 = 500 SOL
-└─ Result: Break-even (if invested 500 SOL)
-```
+Charlie bets 150 USDC on Kanye
+  ├─ Fee: 2.5 USDC
+  └─ Kanye total: 246.25 USDC (98.5 + 147.75)
 
-## 🧪 Test Suite
-
-Run the comprehensive test suite:
-
-```bash
-anchor test --skip-local-validator
+Dave bets 80 USDC on Travis
+  ├─ Fee: 1.2 USDC
+  └─ Travis total: 78.8 USDC
 ```
 
-**Tests (7 total):**
-1. ✅ Creates sentiment-based prediction market
-2. ✅ Alice bets heavily on 'Chicken' (YES)
-3. ✅ Bob and Charlie bet on 'Egg' (NO)
-4. ✅ Cannot bet after market ends
-5. ✅ Everyone claims proportional payouts
-6. ✅ Cannot claim twice
-7. ✅ Shows final market statistics
+**Final Totals:**
+- Kanye: 246.25 USDC (WINNER - most money)
+- Taylor: 49.25 USDC
+- Travis: 78.8 USDC
+- Total Pool: 374.3 USDC
 
-**Test Scenario:** "Chicken vs Egg" meme market
-- Alice: 2 SOL on Chicken → Drives price to 89.8%
-- Bob: 1 SOL on Egg → Adjusts to 11.4%
-- Charlie: 1.5 SOL on Egg → Final Egg sentiment 88.6%
-- All users claim proportional payouts after 40 seconds
+**Resolution:**
+- Creator resolves market
+- Kanye is declared winner
 
-## 🔐 Security Features
+**Payouts:**
+- Alice (bet 98.5 on Kanye):
+  ```
+  (98.5 / 246.25) × 374.3 = 149.7 USDC
+  Profit: 49.7 USDC (49.7% return)
+  ```
+- Charlie (bet 147.75 on Kanye):
+  ```
+  (147.75 / 246.25) × 374.3 = 224.6 USDC
+  Profit: 74.6 USDC (49.7% return)
+  ```
+- Bob (bet on Taylor): 0 USDC (lost)
+- Dave (bet on Travis): 0 USDC (lost)
 
-- ✅ All funds in decentralized escrow (Market PDA)
-- ✅ No admin keys - fully permissionless
-- ✅ Time-locked claiming (after end_timestamp)
-- ✅ Overflow protection with checked math
-- ✅ PDA-based access control
+**Fees Collected:**
+- Creator: 2.625 USDC (can withdraw anytime)
+- Protocol: 2.625 USDC (can withdraw anytime)
+
+## 🔒 Security Features
+
+- ✅ All funds in program-controlled vault
+- ✅ Only creator can resolve
+- ✅ Time-locked claiming (after resolution)
 - ✅ Anti-double-claim protection
-- ✅ Proportional fairness - no one loses 100%
+- ✅ PDA-based access control
+- ✅ Checked arithmetic (overflow protection)
+- ✅ Token account validation
 
-## 💡 Economic Model
+## 📝 Installation
 
-### Revenue Streams
-- Market creation: 0.1 SOL per market
-- Trading fee: 2% of every bet
-- All fees → Treasury PDA
-
-### Example Economics
-```
-100 markets created = 10 SOL
-10,000 SOL trading volume = 200 SOL fees
-Total treasury = 210 SOL
+1. **Update Cargo.toml:**
+```toml
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+anchor-spl = "0.32.1"
 ```
 
-## 🎯 Use Cases
+2. **Copy files:**
+```
+programs/prediction-market/src/
+├── lib.rs
+├── state.rs
+├── error.rs
+└── instructions/
+    ├── mod.rs
+    ├── create_market.rs
+    ├── place_bet.rs
+    ├── resolve_market.rs
+    ├── claim_winnings.rs
+    └── withdraw_fees.rs
+```
 
-### Perfect For
-- 🎭 Meme markets ("Chicken vs Egg", "Pineapple on Pizza")
-- 🎨 Subjective predictions ("Best movie of 2024")
-- 🏆 Community sentiment ("Which feature should we build?")
-- 🎪 Fun betting ("Will the launch be delayed?")
-- 📊 Opinion polling ("Should we rebrand?")
-
-### Not Ideal For
-- ❌ Binary factual events requiring proof
-- ❌ Long-term markets where liquidity is critical
-- ❌ High-stakes decisions needing objective resolution
-
-## 🐛 Troubleshooting
-
-### Build Errors
-
-**IndexMap version error:**
+3. **Build:**
 ```bash
-# Solana's Rust version doesn't support indexmap 2.12+
-# Solution: Use compatible Solana version (2.2.20)
-solana --version
-rustc --version  # Should be 1.82.0
-```
-
-**Cargo.lock version 4 error:**
-```bash
-rm Cargo.lock
-rustup default 1.82.0
 anchor build
 ```
 
-### Deployment Errors
-
-**Program ID mismatch:**
+4. **Deploy:**
 ```bash
-anchor keys sync
-anchor build
 anchor deploy
 ```
 
-**400 Bad Request (devnet):**
-```bash
-# Devnet can be unstable, use localnet or alternative RPC
-solana config set --url https://rpc.ankr.com/solana_devnet
-# Or use localnet
-solana-test-validator
-solana config set --url localhost
+## 🧪 Testing
+
+Create a test file with:
+```typescript
+// Create market with 3 sides
+await program.methods
+  .createMarket(
+    "Who is the best artist?",
+    "Vote with your wallet",
+    new BN(Date.now() / 1000 + 86400), // 24 hours
+    ["Kanye West", "Taylor Swift", "Travis Scott"],
+    new BN(1_000_000) // 1 USDC
+  )
+  .accounts({...})
+  .rpc();
+
+// Place bets
+await program.methods
+  .placeBet(0, new BN(100_000_000)) // 100 USDC on side 0 (Kanye)
+  .accounts({...})
+  .rpc();
+
+// Resolve (after market ends)
+await program.methods
+  .resolveMarket()
+  .accounts({...})
+  .rpc();
+
+// Claim winnings
+await program.methods
+  .claimWinnings()
+  .accounts({...})
+  .rpc();
 ```
 
-### Test Errors
+## ⚠️ Important Notes
 
-**Account already exists:**
-```bash
-# Clean test ledger between runs
-pkill -9 solana-test-validator
-rm -rf test-ledger
-solana-test-validator &
-anchor test --skip-local-validator
-```
+1. **USDC Mint:** You need to use the official USDC mint address
+   - Devnet: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`
+   - Mainnet: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
 
-**Market not ended:**
-```bash
-# Increase end_timestamp in tests
-# Current: 40 seconds + 45 second wait
-```
+2. **Fee Withdrawals:** Need to wait for market to end
 
-## 📚 Resources
+3. **Losers:** Get nothing. Winner-takes-all model.
 
-- [Anchor Documentation](https://www.anchor-lang.com/)
-- [Solana Cookbook](https://solanacookbook.com/)
-- [Constant Product AMM Explained](https://docs.uniswap.org/contracts/v2/concepts/protocol-overview/how-uniswap-works)
-- [Solana CLI](https://docs.solanalabs.com/cli)
+4. **Multiple Bets:** Users can bet on multiple sides (hedging allowed)
 
-## 🤝 Contributing
+5. **No AMM:** Prices don't adjust. Simple tracking of total per side.
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
+## 🚀 Deployment Checklist
 
-## 📄 License
+- [ ] Update `declare_id!` in lib.rs with your program ID
+- [ ] Test on devnet with test USDC
+- [ ] Verify all fee calculations
+- [ ] Test winner determination logic
+- [ ] Test claim payouts
+- [ ] Audit before mainnet
 
-MIT License
+## 📚 Key Differences from Old Contract
 
-## ⚠️ Disclaimer
-
-This is experimental software for educational purposes. Use at your own risk. Not financial advice. Always audit smart contracts before mainnet deployment.
+| Feature | Old (Sentiment) | New (Winner-Takes-All) |
+|---------|----------------|------------------------|
+| Sides | 2 (YES/NO) | 2-10 (custom names) |
+| Payout | Everyone proportional | Winners only |
+| Currency | SOL | USDC |
+| Pricing | AMM (dynamic) | None (just tracking) |
+| Resolution | Automatic | Creator resolves |
+| Bet Limits | 0.01+ SOL | 1-200 USDC |
+| Fees | 2% on bets | 1.5% on bets, 2% on creation |
 
 ---
 
-## 🎉 What Makes This Special
-
-Unlike traditional prediction markets:
-- **Fully on-chain** - No centralized backend
-- **Permissionless** - Anyone can create markets
-- **Fair payouts** - Everyone gets something based on sentiment
-- **Transparent** - All bets visible on Solana explorer
-- **Composable** - Other apps can integrate
-- **Low fees** - 2% vs 5-10% on centralized platforms
-- **Fast** - Solana's 400ms block times
-- **No resolution needed** - Sentiment-based payouts eliminate disputes
-
-**Built with ❤️ on Solana**
-
-*Making prediction markets fun, fair, and fully on-chain*
+**This is a complete rewrite. Use this contract for the multi-side winner-takes-all model you described.**

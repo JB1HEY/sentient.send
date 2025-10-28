@@ -1,0 +1,140 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use crate::state::*;
+use crate::error::ErrorCode;
+
+/// Withdraw accumulated creator fees from a market
+pub fn withdraw_creator_fees(ctx: Context<WithdrawCreatorFees>) -> Result<()> {
+    let market = &mut ctx.accounts.market;
+
+    require!(
+        ctx.accounts.creator.key() == market.creator,
+        ErrorCode::UnauthorizedResolver
+    );
+
+    let amount = market.creator_fees_collected;
+    require!(amount > 0, ErrorCode::NoWinnings);
+
+    // Transfer fees from vault to creator using PDA signer
+    let market_key = market.key();
+    let seeds = &[
+        b"vault",
+        market_key.as_ref(),
+        &[ctx.bumps.market_vault],
+    ];
+    let signer_seeds = &[&seeds[..]];
+
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.market_vault.to_account_info(),
+                to: ctx.accounts.creator_token_account.to_account_info(),
+                authority: ctx.accounts.market.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        amount,
+    )?;
+
+    market.creator_fees_collected = 0;
+
+    msg!("Creator fees withdrawn: {} USDC", amount);
+
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct WithdrawCreatorFees<'info> {
+    #[account(mut)]
+    pub market: Account<'info, Market>,
+
+    /// Market vault holding USDC
+    #[account(
+        mut,
+        seeds = [b"vault", market.key().as_ref()],
+        bump,
+    )]
+    pub market_vault: Account<'info, TokenAccount>,
+
+    /// Creator's USDC token account
+    #[account(
+        mut,
+        constraint = creator_token_account.mint == market_vault.mint @ ErrorCode::InvalidTokenAccount,
+    )]
+    pub creator_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+/// Withdraw protocol fees from a market (only protocol authority)
+pub fn withdraw_protocol_fees(ctx: Context<WithdrawProtocolFees>) -> Result<()> {
+    let market = &mut ctx.accounts.market;
+
+    let amount = market.protocol_fees_collected;
+    require!(amount > 0, ErrorCode::NoWinnings);
+
+    // Transfer fees from vault to protocol using PDA signer
+    let market_key = market.key();
+    let seeds = &[
+        b"vault",
+        market_key.as_ref(),
+        &[ctx.bumps.market_vault],
+    ];
+    let signer_seeds = &[&seeds[..]];
+
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.market_vault.to_account_info(),
+                to: ctx.accounts.protocol_token_account.to_account_info(),
+                authority: ctx.accounts.market.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        amount,
+    )?;
+
+    market.protocol_fees_collected = 0;
+
+    msg!("Protocol fees withdrawn: {} USDC", amount);
+
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct WithdrawProtocolFees<'info> {
+    #[account(mut)]
+    pub market: Account<'info, Market>,
+
+    /// Market vault holding USDC
+    #[account(
+        mut,
+        seeds = [b"vault", market.key().as_ref()],
+        bump,
+    )]
+    pub market_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"treasury"],
+        bump = treasury.bump,
+        constraint = protocol_authority.key() == treasury.authority @ ErrorCode::UnauthorizedResolver,
+    )]
+    pub treasury: Account<'info, Treasury>,
+
+    /// Protocol's USDC token account
+    #[account(
+        mut,
+        constraint = protocol_token_account.mint == market_vault.mint @ ErrorCode::InvalidTokenAccount,
+    )]
+    pub protocol_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub protocol_authority: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+}

@@ -1,33 +1,49 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use crate::state::*;
 use crate::error::ErrorCode;
 
 pub fn handler(ctx: Context<ClaimWinnings>) -> Result<()> {
     let market = &ctx.accounts.market;
     let position = &mut ctx.accounts.position;
-    let clock = Clock::get()?;
 
-    // Validation - market must be ended (past end_timestamp)
-    require!(!market.is_active(clock.unix_timestamp), ErrorCode::MarketNotEnded);
+    // Validation
+    require!(market.resolved, ErrorCode::MarketNotEnded);
     require!(!position.claimed, ErrorCode::AlreadyClaimed);
 
-    // Calculate proportional payout based on final pool ratios
-    let yes_payout = market.calculate_yes_payout(position.yes_shares);
-    let no_payout = market.calculate_no_payout(position.no_shares);
-    let total_payout = yes_payout + no_payout;
+    // Calculate payout (only winners get paid)
+    let user_bet = position.get_bet(market.winning_side_index);
+    let payout = market.calculate_payout(market.winning_side_index, user_bet.amount);
 
-    require!(total_payout > 0, ErrorCode::NoWinnings);
+    require!(payout > 0, ErrorCode::NoWinnings);
 
-    // Transfer proportional winnings from market to user
-    **market.to_account_info().try_borrow_mut_lamports()? -= total_payout;
-    **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += total_payout;
+    // Transfer from vault to user using PDA signer
+    let market_key = market.key();
+    let seeds = &[
+        b"vault",
+        market_key.as_ref(),
+        &[ctx.bumps.market_vault],
+    ];
+    let signer_seeds = &[&seeds[..]];
+
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.market_vault.to_account_info(),
+                to: ctx.accounts.user_token_account.to_account_info(),
+                authority: ctx.accounts.market.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        payout,
+    )?;
 
     // Mark as claimed
     position.claimed = true;
 
-    msg!("Proportional payout claimed: {} SOL", total_payout / 1_000_000_000);
-    msg!("YES shares: {} -> {} SOL", position.yes_shares, yes_payout / 1_000_000_000);
-    msg!("NO shares: {} -> {} SOL", position.no_shares, no_payout / 1_000_000_000);
+    msg!("Winnings claimed: {} USDC", payout);
+    msg!("User had {} USDC on winning side", user_bet.amount);
 
     Ok(())
 }
@@ -37,6 +53,14 @@ pub struct ClaimWinnings<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
 
+    /// Market vault holding USDC
+    #[account(
+        mut,
+        seeds = [b"vault", market.key().as_ref()],
+        bump,
+    )]
+    pub market_vault: Account<'info, TokenAccount>,
+
     #[account(
         mut,
         seeds = [b"position", market.key().as_ref(), user.key().as_ref()],
@@ -44,8 +68,16 @@ pub struct ClaimWinnings<'info> {
     )]
     pub position: Account<'info, UserPosition>,
 
+    /// User's USDC token account
+    #[account(
+        mut,
+        constraint = user_token_account.mint == market_vault.mint @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
+    )]
+    pub user_token_account: Account<'info, TokenAccount>,
+
     #[account(mut)]
     pub user: Signer<'info>,
 
-    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
 }

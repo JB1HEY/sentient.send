@@ -11,9 +11,6 @@ pub enum ErrorCode {
     #[msg("Market has already been resolved")]
     MarketAlreadyResolved,
     
-    #[msg("Insufficient funds for this bet")]
-    InsufficientFunds,
-    
     #[msg("Question is too long (max 200 characters)")]
     QuestionTooLong,
     
@@ -23,8 +20,11 @@ pub enum ErrorCode {
     #[msg("End timestamp must be in the future")]
     InvalidEndTimestamp,
     
-    #[msg("Bet amount is too small (minimum 0.01 SOL)")]
+    #[msg("Bet amount is below minimum (1 USDC)")]
     BetTooSmall,
+    
+    #[msg("Bet amount exceeds maximum (200 USDC)")]
+    BetTooLarge,
     
     #[msg("No winnings to claim")]
     NoWinnings,
@@ -35,9 +35,30 @@ pub enum ErrorCode {
     #[msg("Math overflow occurred")]
     MathOverflow,
     
-    #[msg("Initial liquidity too small (minimum 1 SOL)")]
-    LiquidityTooSmall,
+    #[msg("Market creation amount too small (minimum 1 USDC)")]
+    CreationAmountTooSmall,
     
-    #[msg("Invalid pool state")]
-    InvalidPoolState,
+    #[msg("Invalid side index")]
+    InvalidSideIndex,
+    
+    #[msg("Too many sides (maximum 10)")]
+    TooManySides,
+    
+    #[msg("Too few sides (minimum 2)")]
+    TooFewSides,
+    
+    #[msg("Side name is too long (max 50 characters)")]
+    SideNameTooLong,
+    
+    #[msg("Duplicate side names not allowed")]
+    DuplicateSideName,
+    
+    #[msg("Only market creator can resolve")]
+    UnauthorizedResolver,
+    
+    #[msg("Invalid token account")]
+    InvalidTokenAccount,
+    
+    #[msg("Insufficient token balance")]
+    InsufficientBalance,
 }

@@ -1,58 +1,62 @@
 use anchor_lang::prelude::*;
 
 pub mod state;
-pub mod instructions;
 pub mod error;
+pub mod instructions;
 
 use instructions::*;
 
-declare_id!("2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ");
+declare_id!("YOUR_PROGRAM_ID_HERE");
 
 #[program]
 pub mod prediction_market {
     use super::*;
 
-    /// Create a new prediction market
+    /// Create a new multi-side prediction market
     pub fn create_market(
         ctx: Context<CreateMarket>,
         question: String,
         description: String,
         end_timestamp: i64,
-        initial_liquidity: u64,
-        question_seed: [u8; 32],
+        side_names: Vec<String>,
+        initial_amount: u64,
     ) -> Result<()> {
-        create_market::handler(
+        instructions::create_market::handler(
             ctx,
             question,
             description,
             end_timestamp,
-            initial_liquidity,
-            question_seed,
+            side_names,
+            initial_amount,
         )
     }
 
-    /// Place a bet on YES or NO
+    /// Place a bet on a specific side
     pub fn place_bet(
         ctx: Context<PlaceBet>,
+        side_index: u8,
         amount: u64,
-        is_yes: bool,
     ) -> Result<()> {
-        place_bet::handler(ctx, amount, is_yes)
+        instructions::place_bet::handler(ctx, side_index, amount)
     }
 
-    /// Claim proportional winnings after market ends
+    /// Resolve the market (determine winner)
+    pub fn resolve_market(ctx: Context<ResolveMarket>) -> Result<()> {
+        instructions::resolve_market::handler(ctx)
+    }
+
+    /// Claim winnings if you bet on the winning side
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
-        claim_winnings::handler(ctx)
+        instructions::claim_winnings::handler(ctx)
     }
 
-    /// Add liquidity to a market (optional, for deeper markets)
-    pub fn add_liquidity(
-        ctx: Context<AddLiquidity>,
-        amount: u64,
-    ) -> Result<()> {
-        add_liquidity::handler(ctx, amount)
+    /// Withdraw accumulated creator fees
+    pub fn withdraw_creator_fees(ctx: Context<WithdrawCreatorFees>) -> Result<()> {
+        instructions::withdraw_fees::withdraw_creator_fees(ctx)
+    }
+
+    /// Withdraw accumulated protocol fees (admin only)
+    pub fn withdraw_protocol_fees(ctx: Context<WithdrawProtocolFees>) -> Result<()> {
+        instructions::withdraw_fees::withdraw_protocol_fees(ctx)
     }
 }
-
-#[derive(Accounts)]
-pub struct Initialize {}

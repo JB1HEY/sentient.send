@@ -1,10 +1,10 @@
 export const IDL = {
-  "address": "8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs",
+  "address": "2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ",
   "metadata": {
     "name": "prediction_market",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Decentralized prediction market on Solana"
+    "description": "Decentralized sentiment-based prediction market on Solana"
   },
   "instructions": [
     {
@@ -60,19 +60,6 @@ export const IDL = {
         { "name": "amount", "type": "u64" },
         { "name": "is_yes", "type": "bool" }
       ]
-    },
-    {
-      "name": "resolve_market",
-      "discriminator": [155, 23, 80, 173, 46, 74, 23, 239],
-      "accounts": [
-        { "name": "market", "writable": true },
-        { "name": "treasury", "writable": true },
-        { "name": "resolver", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
-      ],
-      "args": [
-        { "name": "outcome", "type": "bool" }
-      ]
     }
   ],
   "accounts": [
@@ -81,21 +68,19 @@ export const IDL = {
     { "name": "UserPosition", "discriminator": [251, 248, 209, 245, 83, 234, 17, 27] }
   ],
   "errors": [
-    { "code": 6000, "name": "MarketAlreadyResolved", "msg": "Market has already been resolved" },
+    { "code": 6000, "name": "MarketEnded", "msg": "Market has ended, trading is closed" },
     { "code": 6001, "name": "MarketNotEnded", "msg": "Market has not ended yet" },
-    { "code": 6002, "name": "MarketEnded", "msg": "Market has ended, betting is closed" },
+    { "code": 6002, "name": "MarketAlreadyResolved", "msg": "Market has already been resolved" },
     { "code": 6003, "name": "InsufficientFunds", "msg": "Insufficient funds for this bet" },
     { "code": 6004, "name": "QuestionTooLong", "msg": "Question is too long (max 200 characters)" },
     { "code": 6005, "name": "DescriptionTooLong", "msg": "Description is too long (max 500 characters)" },
     { "code": 6006, "name": "InvalidEndTimestamp", "msg": "End timestamp must be in the future" },
     { "code": 6007, "name": "BetTooSmall", "msg": "Bet amount is too small (minimum 0.01 SOL)" },
-    { "code": 6008, "name": "MarketNotResolved", "msg": "Market has not been resolved yet" },
-    { "code": 6009, "name": "NoWinnings", "msg": "No winnings to claim" },
-    { "code": 6010, "name": "AlreadyClaimed", "msg": "Winnings already claimed" },
-    { "code": 6011, "name": "UnauthorizedResolver", "msg": "Only market creator can resolve" },
-    { "code": 6012, "name": "MathOverflow", "msg": "Math overflow occurred" },
-    { "code": 6013, "name": "LiquidityTooSmall", "msg": "Initial liquidity too small (minimum 1 SOL)" },
-    { "code": 6014, "name": "InvalidPoolState", "msg": "Invalid pool state" }
+    { "code": 6008, "name": "NoWinnings", "msg": "No winnings to claim" },
+    { "code": 6009, "name": "AlreadyClaimed", "msg": "Winnings already claimed" },
+    { "code": 6010, "name": "MathOverflow", "msg": "Math overflow occurred" },
+    { "code": 6011, "name": "LiquidityTooSmall", "msg": "Initial liquidity too small (minimum 1 SOL)" },
+    { "code": 6012, "name": "InvalidPoolState", "msg": "Invalid pool state" }
   ],
   "types": [
     {

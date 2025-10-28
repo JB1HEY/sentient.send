@@ -1,159 +1,229 @@
 use anchor_lang::prelude::*;
-use crate::error::ErrorCode;
 
-/// Main market account storing all market data
+/// Maximum number of sides allowed in a market
+pub const MAX_SIDES: usize = 10;
+
+/// Maximum length for side names
+pub const MAX_SIDE_NAME_LENGTH: usize = 50;
+
+/// Minimum bet amount in USDC (1 USDC = 1,000,000 because 6 decimals)
+pub const MIN_BET: u64 = 1_000_000; // 1 USDC
+
+/// Maximum bet amount in USDC (200 USDC)
+pub const MAX_BET: u64 = 200_000_000; // 200 USDC
+
+/// Minimum market creation amount (1 SOL worth of USDC)
+pub const MIN_MARKET_CREATION: u64 = 1_000_000; // 1 USDC minimum
+
+/// Bet fee in basis points (1.5% = 150 basis points)
+pub const BET_FEE_BPS: u64 = 150;
+
+/// Market creation fee in basis points (2% = 200 basis points)
+pub const CREATION_FEE_BPS: u64 = 200;
+
+/// Main market account
 #[account]
 pub struct Market {
-    pub creator: Pubkey,           // Who created the market
-    pub question: String,          // The prediction question
-    pub description: String,       // Additional context
-    pub end_timestamp: i64,        // When trading closes
-    pub resolved: bool,            // Has market ended?
-    pub outcome: bool,             // Final outcome (if resolved)
-    pub yes_pool: u64,            // SOL in YES pool (lamports)
-    pub no_pool: u64,             // SOL in NO pool (lamports)
-    pub k: u128,                  // Constant product for AMM (yes_pool * no_pool)
-    pub total_yes_shares: u64,    // Total YES shares issued
-    pub total_no_shares: u64,     // Total NO shares issued
-    pub treasury_fee: u64,        // Accumulated fees (2% of bets)
-    pub creation_fee: u64,        // Fee paid to create market
-    pub total_volume: u64,        // Total amount bet
-    pub num_bettors: u32,         // Number of unique bettors
-    pub question_hash: [u8; 32],  // Hash of question for PDA seed
-    pub bump: u8,                 // PDA bump seed
+    pub creator: Pubkey,                    // Market creator
+    pub question: String,                   // Market question (max 200 chars)
+    pub description: String,                // Market description (max 500 chars)
+    pub end_timestamp: i64,                 // When market ends
+    pub resolved: bool,                     // Has market been resolved?
+    pub winning_side_index: u8,             // Index of winning side (if resolved)
+    pub total_pool: u64,                    // Total USDC in the pool
+    pub num_sides: u8,                      // Number of sides in this market
+    pub sides: [Side; MAX_SIDES],           // Array of sides
+    pub creator_fees_collected: u64,        // Total fees for creator
+    pub protocol_fees_collected: u64,       // Total fees for protocol
+    pub total_volume: u64,                  // Total volume traded
+    pub num_bettors: u32,                   // Unique bettors
+    pub creation_amount: u64,               // Initial USDC put in by creator
+    pub bump: u8,                           // PDA bump
 }
 
 impl Market {
-    pub const LEN: usize = 8 +    // discriminator
-        32 +                       // creator
-        4 + 200 +                  // question (max 200 chars)
-        4 + 500 +                  // description (max 500 chars)
-        8 +                        // end_timestamp
-        1 +                        // resolved
-        1 +                        // outcome
-        8 +                        // yes_pool
-        8 +                        // no_pool
-        16 +                       // k
-        8 +                        // total_yes_shares
-        8 +                        // total_no_shares
-        8 +                        // treasury_fee
-        8 +                        // creation_fee
-        8 +                        // total_volume
-        4 +                        // num_bettors
-        32 +                       // question_hash
-        1;                         // bump
+    // 8 (discriminator) + 32 (creator) + 4+200 (question) + 4+500 (description)
+    // + 8 (timestamp) + 1 (resolved) + 1 (winning_side) + 8 (total_pool)
+    // + 1 (num_sides) + (MAX_SIDES * Side::LEN) + 8+8 (fees) + 8 (volume)
+    // + 4 (num_bettors) + 8 (creation_amount) + 1 (bump)
+    pub const LEN: usize = 8 + 32 + 204 + 504 + 8 + 1 + 1 + 8 + 1 
+        + (MAX_SIDES * Side::LEN) + 16 + 8 + 4 + 8 + 1;
 
     /// Check if market is still active (before end time)
     pub fn is_active(&self, current_timestamp: i64) -> bool {
-        current_timestamp < self.end_timestamp
+        !self.resolved && current_timestamp < self.end_timestamp
     }
 
-    /// Get current price for YES (between 0 and 1)
-    pub fn get_yes_price(&self) -> u64 {
-        if self.yes_pool == 0 || self.no_pool == 0 {
-            return 5000; // 50% in basis points (1% = 100 bp)
+    /// Get side by index
+    pub fn get_side(&self, index: u8) -> Option<&Side> {
+        if index < self.num_sides {
+            Some(&self.sides[index as usize])
+        } else {
+            None
         }
-        let total = self.yes_pool + self.no_pool;
-        ((self.no_pool as u128 * 10000) / total as u128) as u64
     }
 
-    /// Get current price for NO
-    pub fn get_no_price(&self) -> u64 {
-        10000 - self.get_yes_price()
+    /// Get mutable side by index
+    pub fn get_side_mut(&mut self, index: u8) -> Option<&mut Side> {
+        if index < self.num_sides {
+            Some(&mut self.sides[index as usize])
+        } else {
+            None
+        }
     }
 
-    /// Calculate shares received for buying YES
-    pub fn calculate_yes_shares(&self, amount_in: u64) -> Result<u64> {
-        let new_no_pool = self.no_pool.checked_add(amount_in)
-            .ok_or(ErrorCode::MathOverflow)?;
-        
-        let new_yes_pool = (self.k / new_no_pool as u128) as u64;
-        
-        Ok(self.yes_pool.checked_sub(new_yes_pool)
-            .ok_or(ErrorCode::MathOverflow)?)
+    /// Determine winning side (side with most USDC)
+    pub fn determine_winner(&self) -> u8 {
+        let mut winning_index = 0;
+        let mut max_amount = 0u64;
+
+        for i in 0..self.num_sides {
+            let side = &self.sides[i as usize];
+            if side.total_amount > max_amount {
+                max_amount = side.total_amount;
+                winning_index = i;
+            }
+        }
+
+        winning_index
     }
 
-    /// Calculate shares received for buying NO
-    pub fn calculate_no_shares(&self, amount_in: u64) -> Result<u64> {
-        let new_yes_pool = self.yes_pool.checked_add(amount_in)
-            .ok_or(ErrorCode::MathOverflow)?;
-        
-        let new_no_pool = (self.k / new_yes_pool as u128) as u64;
-        
-        Ok(self.no_pool.checked_sub(new_no_pool)
-            .ok_or(ErrorCode::MathOverflow)?)
-    }
-
-    /// Calculate proportional payout for YES shares after market ends
-    pub fn calculate_yes_payout(&self, yes_shares: u64) -> u64 {
-        if self.total_yes_shares == 0 {
+    /// Calculate payout for a user on a specific side
+    pub fn calculate_payout(&self, side_index: u8, user_amount: u64) -> u64 {
+        if !self.resolved || side_index != self.winning_side_index {
             return 0;
         }
-        let total_pool = self.yes_pool + self.no_pool;
-        let yes_pool_share = (self.yes_pool as u128 * total_pool as u128) / (self.yes_pool + self.no_pool) as u128;
-        ((yes_pool_share * yes_shares as u128) / self.total_yes_shares as u128) as u64
-    }
 
-    /// Calculate proportional payout for NO shares after market ends
-    pub fn calculate_no_payout(&self, no_shares: u64) -> u64 {
-        if self.total_no_shares == 0 {
+        let winning_side = &self.sides[side_index as usize];
+        if winning_side.total_amount == 0 {
             return 0;
         }
-        let total_pool = self.yes_pool + self.no_pool;
-        let no_pool_share = (self.no_pool as u128 * total_pool as u128) / (self.yes_pool + self.no_pool) as u128;
-        ((no_pool_share * no_shares as u128) / self.total_no_shares as u128) as u64
+
+        // User gets their proportional share of the total pool
+        ((user_amount as u128 * self.total_pool as u128) / winning_side.total_amount as u128) as u64
+    }
+}
+
+/// Individual side/option in a market
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+pub struct Side {
+    pub name: [u8; MAX_SIDE_NAME_LENGTH],  // Side name (e.g., "Kanye West")
+    pub name_len: u8,                       // Actual length of name
+    pub total_amount: u64,                  // Total USDC bet on this side
+    pub num_bettors: u32,                   // Number of bettors on this side
+}
+
+impl Side {
+    pub const LEN: usize = MAX_SIDE_NAME_LENGTH + 1 + 8 + 4;
+
+    /// Create a new side
+    pub fn new(name: &str) -> Result<Self> {
+        let name_bytes = name.as_bytes();
+        require!(
+            name_bytes.len() <= MAX_SIDE_NAME_LENGTH,
+            crate::error::ErrorCode::SideNameTooLong
+        );
+
+        let mut name_array = [0u8; MAX_SIDE_NAME_LENGTH];
+        name_array[..name_bytes.len()].copy_from_slice(name_bytes);
+
+        Ok(Self {
+            name: name_array,
+            name_len: name_bytes.len() as u8,
+            total_amount: 0,
+            num_bettors: 0,
+        })
+    }
+
+    /// Get the name as a string
+    pub fn get_name(&self) -> String {
+        String::from_utf8_lossy(&self.name[..self.name_len as usize]).to_string()
+    }
+
+    /// Add a bet to this side
+    pub fn add_bet(&mut self, amount: u64, is_new_bettor: bool) {
+        self.total_amount += amount;
+        if is_new_bettor {
+            self.num_bettors += 1;
+        }
+    }
+}
+
+impl Default for Side {
+    fn default() -> Self {
+        Self {
+            name: [0u8; MAX_SIDE_NAME_LENGTH],
+            name_len: 0,
+            total_amount: 0,
+            num_bettors: 0,
+        }
     }
 }
 
 /// User's position in a specific market
 #[account]
 pub struct UserPosition {
-    pub user: Pubkey,              // Who owns this position
-    pub market: Pubkey,            // Which market
-    pub yes_shares: u64,           // How many YES shares
-    pub no_shares: u64,            // How many NO shares
-    pub amount_invested: u64,      // Total SOL invested
-    pub claimed: bool,             // Has user claimed winnings?
-    pub bump: u8,                  // PDA bump
+    pub user: Pubkey,                       // Position owner
+    pub market: Pubkey,                     // Market reference
+    pub bets: [SideBet; MAX_SIDES],         // Bets on each side
+    pub total_invested: u64,                // Total USDC invested
+    pub claimed: bool,                      // Has user claimed winnings?
+    pub bump: u8,                           // PDA bump
 }
 
 impl UserPosition {
-    pub const LEN: usize = 8 +     // discriminator
-        32 +                        // user
-        32 +                        // market
-        8 +                         // yes_shares
-        8 +                         // no_shares
-        8 +                         // amount_invested
-        1 +                         // claimed
-        1;                          // bump
+    pub const LEN: usize = 8 + 32 + 32 + (MAX_SIDES * SideBet::LEN) + 8 + 1 + 1;
 
-    /// Calculate potential payout if market resolves to outcome
-    pub fn calculate_payout(&self, outcome: bool, _market: &Market) -> u64 {
-        if outcome {
-            // YES won - each YES share is worth 1 SOL
-            self.yes_shares
-        } else {
-            // NO won - each NO share is worth 1 SOL
-            self.no_shares
+    /// Get bet for a specific side
+    pub fn get_bet(&self, side_index: u8) -> &SideBet {
+        &self.bets[side_index as usize]
+    }
+
+    /// Get mutable bet for a specific side
+    pub fn get_bet_mut(&mut self, side_index: u8) -> &mut SideBet {
+        &mut self.bets[side_index as usize]
+    }
+
+    /// Add a bet to a side
+    pub fn add_bet(&mut self, side_index: u8, amount: u64) {
+        let bet = self.get_bet_mut(side_index);
+        let is_first_bet = bet.amount == 0;
+        bet.amount += amount;
+        self.total_invested += amount;
+        
+        if is_first_bet {
+            bet.has_bet = true;
         }
+    }
+
+    /// Check if user has any bets
+    pub fn has_any_bets(&self) -> bool {
+        self.bets.iter().any(|bet| bet.has_bet)
     }
 }
 
-/// Global treasury for platform fees
+/// Individual bet on a side
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+pub struct SideBet {
+    pub amount: u64,        // Amount bet on this side
+    pub has_bet: bool,      // Has user bet on this side?
+}
+
+impl SideBet {
+    pub const LEN: usize = 8 + 1;
+}
+
+/// Global treasury for protocol fees
 #[account]
 pub struct Treasury {
-    pub authority: Pubkey,         // Who can withdraw fees
-    pub total_fees: u64,           // Total fees accumulated
-    pub total_markets: u32,        // Number of markets created
-    pub total_volume: u64,         // All-time trading volume
-    pub bump: u8,
+    pub authority: Pubkey,          // Treasury authority
+    pub total_protocol_fees: u64,   // Total protocol fees collected
+    pub total_creator_fees: u64,    // Total creator fees collected
+    pub total_markets: u32,         // Number of markets created
+    pub total_volume: u64,          // All-time trading volume
+    pub bump: u8,                   // PDA bump
 }
 
 impl Treasury {
-    pub const LEN: usize = 8 +     // discriminator
-        32 +                        // authority
-        8 +                         // total_fees
-        4 +                         // total_markets
-        8 +                         // total_volume
-        1;                          // bump
+    pub const LEN: usize = 8 + 32 + 8 + 8 + 4 + 8 + 1;
 }

@@ -1,7 +1,7 @@
 import { PublicKey, clusterApiUrl } from '@solana/web3.js';
 
 // Use the program ID from your IDL
-export const PROGRAM_ID = new PublicKey('8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs');
+export const PROGRAM_ID = new PublicKey('2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ');
 
 export const NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'devnet') as 'devnet' | 'mainnet-beta' | 'testnet';
 

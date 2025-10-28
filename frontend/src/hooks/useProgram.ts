@@ -1,3 +1,4 @@
+// frontend/src/hooks/useProgram.ts
 import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useMemo } from 'react';
 import { Program, AnchorProvider } from '@coral-xyz/anchor';
@@ -15,6 +16,7 @@ export function useProgram() {
       commitment: 'confirmed',
     });
 
+    // Cast IDL to any to avoid TypeScript errors
     return new Program(IDL as any, provider);
   }, [connection, wallet]);
 

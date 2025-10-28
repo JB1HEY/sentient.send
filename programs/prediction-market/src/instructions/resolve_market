@@ -1,0 +1,43 @@
+use anchor_lang::prelude::*;
+use crate::state::*;
+use crate::error::ErrorCode;
+
+pub fn handler(ctx: Context<ResolveMarket>) -> Result<()> {
+    let market = &mut ctx.accounts.market;
+    let clock = Clock::get()?;
+
+    // Validation
+    require!(
+        clock.unix_timestamp >= market.end_timestamp,
+        ErrorCode::MarketNotEnded
+    );
+    require!(!market.resolved, ErrorCode::MarketAlreadyResolved);
+    require!(
+        ctx.accounts.resolver.key() == market.creator,
+        ErrorCode::UnauthorizedResolver
+    );
+
+    // Determine winner (side with most USDC)
+    let winning_index = market.determine_winner();
+    
+    market.resolved = true;
+    market.winning_side_index = winning_index;
+
+    let winning_side = &market.sides[winning_index as usize];
+    
+    msg!("Market resolved!");
+    msg!("Winning side: {}", winning_side.get_name());
+    msg!("Total pool to distribute: {} USDC", market.total_pool);
+    msg!("Winning side had: {} USDC", winning_side.total_amount);
+
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct ResolveMarket<'info> {
+    #[account(mut)]
+    pub market: Account<'info, Market>,
+
+    #[account(mut)]
+    pub resolver: Signer<'info>,
+}
