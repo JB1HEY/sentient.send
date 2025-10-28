@@ -1,7 +1,7 @@
 import { PublicKey, clusterApiUrl } from '@solana/web3.js';
 
 // Program ID
-export const PROGRAM_ID = new PublicKey('2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ');
+export const PROGRAM_ID = new PublicKey('C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT');
 
 // Network configuration
 export const NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'devnet') as 'devnet' | 'mainnet-beta' | 'testnet';

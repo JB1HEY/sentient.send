@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
 import { getMarketPda, getPositionPda, getTreasuryPda } from '@/lib/anchor';
@@ -17,7 +17,7 @@ import {
 import Navbar from '@/components/Navbar';
 
 export default function CreatePage() {
-  const { publicKey } = useWallet();
+  const { publicKey, connected } = useWallet();
   const program = useProgram();
 
   const [question, setQuestion] = useState('');
@@ -33,6 +33,15 @@ export default function CreatePage() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split('T')[0];
+
+  // Add useEffect to log connection state
+  useEffect(() => {
+    console.log('Wallet state:', { 
+      publicKey: publicKey?.toString(), 
+      connected, 
+      hasProgram: !!program 
+    });
+  }, [publicKey, connected, program]);
 
   function addSide() {
     if (sideNames.length < MAX_SIDES) {
@@ -58,6 +67,7 @@ export default function CreatePage() {
     setSuccess('');
 
     console.log('Debug - publicKey:', publicKey?.toString());
+    console.log('Debug - connected:', connected);
     console.log('Debug - program:', program);
 
     if (!publicKey) {
@@ -66,7 +76,7 @@ export default function CreatePage() {
     }
 
     if (!program) {
-      setError('Program not initialized. Please reconnect your wallet.');
+      setError('Program not ready. Please try again.');
       return;
     }
 
@@ -136,6 +146,7 @@ export default function CreatePage() {
       console.log('Creating market...');
       console.log('Market PDA:', marketPda.toString());
       console.log('Position PDA:', positionPda.toString());
+      console.log('Treasury PDA:', treasuryPda.toString());
       console.log('Question:', question);
       console.log('Side names:', validSideNames);
       console.log('Amount (lamports):', amountLamports.toString());
@@ -203,6 +214,22 @@ export default function CreatePage() {
             <h2 className="text-3xl font-bold mb-6 bg-gradient-main bg-clip-text text-transparent">
               Create Multi-Side Market
             </h2>
+
+            {/* Wallet Status Indicator */}
+            {!publicKey && (
+              <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400">
+                <p className="text-sm text-yellow-700">
+                  Please connect your wallet to create a market
+                </p>
+              </div>
+            )}
+            {publicKey && !program && (
+              <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400">
+                <p className="text-sm text-blue-700">
+                  Loading program... If this takes more than 5 seconds, try refreshing the page.
+                </p>
+              </div>
+            )}
 
             {/* Question */}
             <div className="mb-6">
@@ -408,7 +435,7 @@ export default function CreatePage() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading || !publicKey}
+              disabled={loading || !publicKey || !program}
               className="w-full bg-gradient-main text-white py-4 rounded-lg font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -421,6 +448,8 @@ export default function CreatePage() {
                 </span>
               ) : !publicKey ? (
                 'Connect Wallet First'
+              ) : !program ? (
+                'Loading... (refresh if stuck)'
               ) : (
                 `Create Market (${totalCost} SOL)`
               )}
