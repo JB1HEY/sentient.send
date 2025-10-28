@@ -31,19 +31,6 @@ export function getMarketPda(creator: PublicKey, question: string) {
   return { marketPda, bump };
 }
 
-// Helper to derive market vault PDA (holds USDC)
-export function getMarketVaultPda(market: PublicKey) {
-  const [vaultPda, bump] = PublicKey.findProgramAddressSync(
-    [
-      Buffer.from('vault'),
-      market.toBuffer(),
-    ],
-    PROGRAM_ID
-  );
-  
-  return { vaultPda, bump };
-}
-
 // Helper to derive position PDA
 export function getPositionPda(market: PublicKey, user: PublicKey) {
   const [positionPda, bump] = PublicKey.findProgramAddressSync(

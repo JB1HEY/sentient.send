@@ -3,9 +3,8 @@
 import { useMemo } from 'react';
 import { AnchorProvider, Program, Idl } from '@coral-xyz/anchor';
 import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PROGRAM_ID } from '@/lib/constants';
 
-// Import IDL as raw JSON
+// Updated IDL for SOL-based contract (no vault, no token accounts)
 const IDL_JSON = {
   "address": "2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ",
   "metadata": {
@@ -30,14 +29,10 @@ const IDL_JSON = {
       "discriminator": [103, 226, 97, 235, 200, 188, 251, 254],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
+        { "name": "position", "writable": true },
         { "name": "treasury", "writable": true },
-        { "name": "creator_token_account", "writable": true },
-        { "name": "usdc_mint" },
         { "name": "creator", "writable": true, "signer": true },
-        { "name": "token_program" },
-        { "name": "system_program", "address": "11111111111111111111111111111111" },
-        { "name": "rent", "address": "SysvarRent111111111111111111111111111111111" }
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
       ],
       "args": [
         { "name": "question", "type": "string" },
@@ -52,11 +47,8 @@ const IDL_JSON = {
       "discriminator": [222, 62, 67, 220, 63, 166, 126, 33],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
         { "name": "position", "writable": true },
-        { "name": "user_token_account", "writable": true },
         { "name": "user", "writable": true, "signer": true },
-        { "name": "token_program" },
         { "name": "system_program", "address": "11111111111111111111111111111111" }
       ],
       "args": [
@@ -69,11 +61,28 @@ const IDL_JSON = {
       "discriminator": [161, 215, 24, 59, 14, 236, 242, 221],
       "accounts": [
         { "name": "market", "writable": true },
-        { "name": "market_vault", "writable": true },
         { "name": "position", "writable": true },
-        { "name": "user_token_account", "writable": true },
-        { "name": "user", "writable": true, "signer": true },
-        { "name": "token_program" }
+        { "name": "user", "writable": true, "signer": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_creator_fees",
+      "discriminator": [45, 108, 41, 166, 198, 81, 230, 71],
+      "accounts": [
+        { "name": "market", "writable": true },
+        { "name": "treasury", "writable": true },
+        { "name": "creator", "writable": true, "signer": true }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_protocol_fees",
+      "discriminator": [200, 123, 76, 231, 167, 90, 123, 45],
+      "accounts": [
+        { "name": "market", "writable": true },
+        { "name": "treasury" },
+        { "name": "protocol_authority", "writable": true, "signer": true }
       ],
       "args": []
     }
@@ -90,11 +99,17 @@ const IDL_JSON = {
     { "code": 6003, "name": "QuestionTooLong", "msg": "Question is too long (max 200 characters)" },
     { "code": 6004, "name": "DescriptionTooLong", "msg": "Description is too long (max 500 characters)" },
     { "code": 6005, "name": "InvalidEndTimestamp", "msg": "End timestamp must be in the future" },
-    { "code": 6006, "name": "BetTooSmall", "msg": "Bet amount is below minimum (1 USDC)" },
-    { "code": 6007, "name": "BetTooLarge", "msg": "Bet amount exceeds maximum (200 USDC)" },
+    { "code": 6006, "name": "BetTooSmall", "msg": "Bet amount is below minimum (0.01 SOL)" },
+    { "code": 6007, "name": "BetTooLarge", "msg": "Bet amount exceeds maximum (1 SOL)" },
     { "code": 6008, "name": "NoWinnings", "msg": "No winnings to claim" },
     { "code": 6009, "name": "AlreadyClaimed", "msg": "Winnings already claimed" },
-    { "code": 6010, "name": "MathOverflow", "msg": "Math overflow occurred" }
+    { "code": 6010, "name": "MathOverflow", "msg": "Math overflow occurred" },
+    { "code": 6011, "name": "CreationAmountTooSmall", "msg": "Market creation amount too small (minimum 1 SOL)" },
+    { "code": 6012, "name": "InvalidSideIndex", "msg": "Invalid side index" },
+    { "code": 6013, "name": "InvalidSideCount", "msg": "Invalid number of sides (must be 2-10)" },
+    { "code": 6014, "name": "SideNameTooLong", "msg": "Side name is too long (max 50 characters)" },
+    { "code": 6015, "name": "DuplicateSideName", "msg": "Duplicate side names not allowed" },
+    { "code": 6016, "name": "UnauthorizedResolver", "msg": "Only market creator can resolve" }
   ],
   "types": [
     {
@@ -134,6 +149,20 @@ const IDL_JSON = {
       }
     },
     {
+      "name": "Treasury",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "pubkey" },
+          { "name": "total_protocol_fees", "type": "u64" },
+          { "name": "total_creator_fees", "type": "u64" },
+          { "name": "total_markets", "type": "u32" },
+          { "name": "total_volume", "type": "u64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
       "name": "UserPosition",
       "type": {
         "kind": "struct",
@@ -166,6 +195,7 @@ export function useProgram() {
 
   return useMemo(() => {
     if (!wallet) {
+      console.log('useProgram: No wallet connected');
       return null;
     }
 
@@ -174,15 +204,13 @@ export function useProgram() {
         commitment: 'confirmed',
       });
 
-      // Create program with explicit type casting
-      const program = new Program(
-        IDL_JSON as Idl,
-        provider
-      );
-
+      const program = new Program(IDL_JSON as Idl, provider);
+      
+      console.log('✅ Program initialized successfully');
+      
       return program;
     } catch (error) {
-      console.error('Error creating program:', error);
+      console.error('❌ Failed to initialize program:', error);
       return null;
     }
   }, [connection, wallet]);

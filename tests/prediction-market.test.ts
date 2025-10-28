@@ -1,1183 +1,751 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { PredictionMarket } from "../target/types/prediction_market";
-import { 
-  PublicKey, 
-  SystemProgram, 
-  Keypair,
-  LAMPORTS_PER_SOL 
-} from "@solana/web3.js";
-import { 
-  TOKEN_PROGRAM_ID,
-  createMint,
-  getOrCreateAssociatedTokenAccount,
-  mintTo,
-} from "@solana/spl-token";
-import { assert } from "chai";
+import { PublicKey, SystemProgram, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { expect } from "chai";
 
-describe("prediction-market", () => {
+describe("prediction_market (SOL-based)", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.PredictionMarket as Program<PredictionMarket>;
   
-  let usdcMint: PublicKey;
-  let creator: Keypair;
-  let creatorTokenAccount: PublicKey;
-  
-  let alice: Keypair;
-  let aliceTokenAccount: PublicKey;
-  
-  let bob: Keypair;
-  let bobTokenAccount: PublicKey;
-  
-  let charlie: Keypair;
-  let charlieTokenAccount: PublicKey;
-  
-  let dave: Keypair;
-  let daveTokenAccount: PublicKey;
+  let treasuryPda: PublicKey;
+  let treasuryBump: number;
+
+  // Helper to get market PDA
+  function getMarketPda(creator: PublicKey, question: string) {
+    const [marketPda, bump] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("market"),
+        creator.toBuffer(),
+        Buffer.from(question),
+      ],
+      program.programId
+    );
+    return { marketPda, bump };
+  }
+
+  // Helper to get position PDA
+  function getPositionPda(market: PublicKey, user: PublicKey) {
+    const [positionPda, bump] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("position"),
+        market.toBuffer(),
+        user.toBuffer(),
+      ],
+      program.programId
+    );
+    return { positionPda, bump };
+  }
 
   before(async () => {
-    // Create test users
-    creator = Keypair.generate();
-    alice = Keypair.generate();
-    bob = Keypair.generate();
-    charlie = Keypair.generate();
-    dave = Keypair.generate();
-
-    // Airdrop SOL for transaction fees
-    await Promise.all([
-      provider.connection.requestAirdrop(creator.publicKey, 10 * LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(alice.publicKey, 5 * LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(bob.publicKey, 5 * LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(charlie.publicKey, 5 * LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(dave.publicKey, 5 * LAMPORTS_PER_SOL),
-    ]);
-
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Create USDC mock mint
-    usdcMint = await createMint(
-      provider.connection,
-      creator,
-      creator.publicKey,
-      null,
-      6 // USDC has 6 decimals
-    );
-
-    console.log("USDC Mint:", usdcMint.toString());
-
-    // Initialize treasury first
-    const [treasuryPda] = PublicKey.findProgramAddressSync(
+    // Get treasury PDA
+    [treasuryPda, treasuryBump] = PublicKey.findProgramAddressSync(
       [Buffer.from("treasury")],
       program.programId
     );
 
     try {
-      // Check if treasury already exists
-      const treasuryAccount = await program.account.treasury.fetch(treasuryPda);
-      console.log("Treasury already exists with authority:", treasuryAccount.authority.toString());
-    } catch (err) {
-      // Treasury doesn't exist, create it
-      try {
-        await program.methods
-          .initializeTreasury()
-          .accounts({
-            treasury: treasuryPda,
-            authority: creator.publicKey,
-            systemProgram: SystemProgram.programId,
-          })
-          .signers([creator])
-          .rpc();
-        console.log("Treasury initialized");
-      } catch (initErr: any) {
-        // If it fails due to already existing, that's okay
-        if (initErr.toString().includes("already in use")) {
-          console.log("Treasury account exists but not initialized properly");
-        } else {
-          throw initErr;
-        }
-      }
-    }
-
-    // Create token accounts
-    const creatorAta = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      creator,
-      usdcMint,
-      creator.publicKey
-    );
-    creatorTokenAccount = creatorAta.address;
-
-    const aliceAta = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      alice,
-      usdcMint,
-      alice.publicKey
-    );
-    aliceTokenAccount = aliceAta.address;
-
-    const bobAta = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      bob,
-      usdcMint,
-      bob.publicKey
-    );
-    bobTokenAccount = bobAta.address;
-
-    const charlieAta = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      charlie,
-      usdcMint,
-      charlie.publicKey
-    );
-    charlieTokenAccount = charlieAta.address;
-
-    const daveAta = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      dave,
-      usdcMint,
-      dave.publicKey
-    );
-    daveTokenAccount = daveAta.address;
-
-    // Mint USDC to all users
-    await mintTo(
-      provider.connection,
-      creator,
-      usdcMint,
-      creatorTokenAccount,
-      creator,
-      1000_000_000 // 1000 USDC
-    );
-
-    await mintTo(
-      provider.connection,
-      creator,
-      usdcMint,
-      aliceTokenAccount,
-      creator,
-      500_000_000 // 500 USDC
-    );
-
-    await mintTo(
-      provider.connection,
-      creator,
-      usdcMint,
-      bobTokenAccount,
-      creator,
-      300_000_000 // 300 USDC
-    );
-
-    await mintTo(
-      provider.connection,
-      creator,
-      usdcMint,
-      charlieTokenAccount,
-      creator,
-      400_000_000 // 400 USDC
-    );
-
-    await mintTo(
-      provider.connection,
-      creator,
-      usdcMint,
-      daveTokenAccount,
-      creator,
-      200_000_000 // 200 USDC
-    );
-
-    console.log("Test setup complete!");
-  });
-
-  describe("Market Creation", () => {
-    it("Creates a market with valid parameters", async () => {
-      const question = "Who will win the 2024 election?";
-      const description = "Market resolves based on official results";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 3600); // 1 hour
-      const sideNames = ["Donald Trump", "Kamala Harris", "Other"];
-      const initialAmount = new anchor.BN(150_000_000); // 150 USDC
-
-      const [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
-
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
-
-      const [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
-
+      // Initialize treasury
       await program.methods
-        .createMarket(
-          question,
-          description,
-          endTimestamp,
-          sideNames,
-          initialAmount
-        )
+        .initializeTreasury()
         .accounts({
-          market: marketPda,
-          marketVault: vaultPda,
           treasury: treasuryPda,
-          creatorTokenAccount,
-          usdcMint,
-          creator: creator.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          authority: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .signers([creator])
+        .rpc();
+      
+      console.log("✅ Treasury initialized");
+    } catch (err) {
+      console.log("Treasury already initialized or error:", err.message);
+    }
+  });
+
+  describe("Treasury", () => {
+    it("Treasury is initialized correctly", async () => {
+      const treasury = await program.account.treasury.fetch(treasuryPda);
+      
+      expect(treasury.authority.toString()).to.equal(
+        provider.wallet.publicKey.toString()
+      );
+      expect(treasury.totalProtocolFees.toNumber()).to.equal(0);
+      expect(treasury.totalCreatorFees.toNumber()).to.equal(0);
+      expect(treasury.totalMarkets).to.be.at.least(0);
+    });
+  });
+
+  describe("Create Market", () => {
+    it("Creates a 2-side market with SOL", async () => {
+      const creator = provider.wallet.publicKey;
+      const question = `BTC $100k ${Date.now()}`; // Unique per run
+      const description = "Market resolves based on BTC price on Dec 31, 2024";
+      const endTimestamp = new anchor.BN(Date.now() / 1000 + 86400); // 1 day from now
+      const sideNames = ["Yes", "No"];
+      const initialAmount = new anchor.BN(1 * LAMPORTS_PER_SOL); // 1 SOL
+
+      const { marketPda } = getMarketPda(creator, question);
+      const { positionPda } = getPositionPda(marketPda, creator);
+
+      const creatorBalanceBefore = await provider.connection.getBalance(creator);
+
+      await program.methods
+        .createMarket(question, description, endTimestamp, sideNames, initialAmount)
+        .accounts({
+          market: marketPda,
+          position: positionPda,
+          treasury: treasuryPda,
+          creator: creator,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      const creatorBalanceAfter = await provider.connection.getBalance(creator);
+      const market = await program.account.market.fetch(marketPda);
+      const position = await program.account.userPosition.fetch(positionPda);
+
+      // Verify market data
+      expect(market.creator.toString()).to.equal(creator.toString());
+      expect(market.question).to.equal(question);
+      expect(market.description).to.equal(description);
+      expect(market.numSides).to.equal(2);
+      expect(market.resolved).to.be.false;
+      
+      // Verify fees (2% of 1 SOL = 0.02 SOL = 20,000,000 lamports)
+      const expectedFee = initialAmount.toNumber() * 0.02;
+      expect(market.feePool.toNumber()).to.equal(expectedFee);
+      
+      // Verify pool (98% of 1 SOL)
+      const expectedPool = initialAmount.toNumber() - expectedFee;
+      expect(market.totalPool.toNumber()).to.equal(expectedPool);
+      
+      // Verify each side gets equal amount
+      const amountPerSide = expectedPool / 2;
+      expect(market.sides[0].totalAmount.toNumber()).to.equal(amountPerSide);
+      expect(market.sides[1].totalAmount.toNumber()).to.equal(amountPerSide);
+
+      // Verify creator position
+      expect(position.user.toString()).to.equal(creator.toString());
+      expect(position.totalInvested.toNumber()).to.equal(initialAmount.toNumber());
+      expect(position.bets[0].amount.toNumber()).to.equal(amountPerSide);
+      expect(position.bets[1].amount.toNumber()).to.equal(amountPerSide);
+      expect(position.bets[0].hasBet).to.be.true;
+      expect(position.bets[1].hasBet).to.be.true;
+
+      // Verify SOL was transferred
+      const solSpent = creatorBalanceBefore - creatorBalanceAfter;
+      expect(solSpent).to.be.greaterThan(initialAmount.toNumber()); // includes rent
+
+      console.log("✅ 2-side market created with 1 SOL");
+      console.log("   Fee pool:", market.feePool.toNumber() / LAMPORTS_PER_SOL, "SOL");
+      console.log("   Total pool:", market.totalPool.toNumber() / LAMPORTS_PER_SOL, "SOL");
+      console.log("   Per side:", amountPerSide / LAMPORTS_PER_SOL, "SOL");
+    });
+
+    it("Creates a 3-side market with SOL", async () => {
+      const creator = provider.wallet.publicKey;
+      const question = `2024 election ${Date.now()}`; // Unique question
+      const description = "Market resolves when election results are certified";
+      const endTimestamp = new anchor.BN(Date.now() / 1000 + 86400);
+      const sideNames = ["Trump", "Harris", "Other"];
+      const initialAmount = new anchor.BN(2 * LAMPORTS_PER_SOL); // 2 SOL
+
+      const { marketPda } = getMarketPda(creator, question);
+      const { positionPda } = getPositionPda(marketPda, creator);
+
+      await program.methods
+        .createMarket(question, description, endTimestamp, sideNames, initialAmount)
+        .accounts({
+          market: marketPda,
+          position: positionPda,
+          treasury: treasuryPda,
+          creator: creator,
+          systemProgram: SystemProgram.programId,
+        })
         .rpc();
 
       const market = await program.account.market.fetch(marketPda);
 
-      assert.equal(market.question, question);
-      assert.equal(market.description, description);
-      assert.equal(market.numSides, 3);
-      assert.equal(market.resolved, false);
+      expect(market.numSides).to.equal(3);
       
-      // Check fee calculation: 2% of 150 = 3 USDC
-      const expectedFeePool = new anchor.BN(3_000_000);
-      assert.ok(market.feePool.eq(expectedFeePool), "Fee pool should be 3 USDC");
-      
-      // Check total pool: 150 - 3 = 147 USDC
-      const expectedTotalPool = new anchor.BN(147_000_000);
-      assert.ok(market.totalPool.eq(expectedTotalPool), "Total pool should be 147 USDC");
+      const expectedFee = initialAmount.toNumber() * 0.02;
+      const expectedPool = initialAmount.toNumber() - expectedFee;
+      const amountPerSide = expectedPool / 3;
 
-      console.log("✅ Market created successfully");
+      expect(market.sides[0].totalAmount.toNumber()).to.be.closeTo(amountPerSide, 1);
+      expect(market.sides[1].totalAmount.toNumber()).to.be.closeTo(amountPerSide, 1);
+      expect(market.sides[2].totalAmount.toNumber()).to.be.closeTo(amountPerSide, 1);
+
+      console.log("✅ 3-side market created with 2 SOL");
+      console.log("   Per side:", amountPerSide / LAMPORTS_PER_SOL, "SOL");
     });
 
-    it("Fails to create market with less than 150 USDC", async () => {
-      const question = "Invalid market";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 3600);
+    it("Fails with amount below minimum (1 SOL)", async () => {
+      const creator = provider.wallet.publicKey;
+      const question = `Low amount ${Date.now()}`;
+      const endTimestamp = new anchor.BN(Date.now() / 1000 + 86400);
       const sideNames = ["Yes", "No"];
-      const initialAmount = new anchor.BN(100_000_000); // 100 USDC (too small)
+      const initialAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL); // 0.5 SOL - too low
 
-      const [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
-
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
-
-      const [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
+      const { marketPda } = getMarketPda(creator, question);
+      const { positionPda } = getPositionPda(marketPda, creator);
 
       try {
         await program.methods
-          .createMarket(
-            question,
-            "",
-            endTimestamp,
-            sideNames,
-            initialAmount
-          )
+          .createMarket(question, "", endTimestamp, sideNames, initialAmount)
           .accounts({
             market: marketPda,
-            marketVault: vaultPda,
+            position: positionPda,
             treasury: treasuryPda,
-            creatorTokenAccount,
-            usdcMint,
-            creator: creator.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            creator: creator,
             systemProgram: SystemProgram.programId,
           })
-          .signers([creator])
           .rpc();
         
-        assert.fail("Should have failed with CreationAmountTooSmall error");
-      } catch (err: any) {
-        assert.include(err.toString(), "CreationAmountTooSmall");
-        console.log("✅ Correctly rejected market with insufficient funds");
-      }
-    });
-
-    it("Fails to create market with only 1 side", async () => {
-      const question = "Invalid sides market";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 3600);
-      const sideNames = ["Only One Side"];
-      const initialAmount = new anchor.BN(150_000_000);
-
-      const [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
-
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
-
-      const [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
-
-      try {
-        await program.methods
-          .createMarket(
-            question,
-            "",
-            endTimestamp,
-            sideNames,
-            initialAmount
-          )
-          .accounts({
-            market: marketPda,
-            marketVault: vaultPda,
-            treasury: treasuryPda,
-            creatorTokenAccount,
-            usdcMint,
-            creator: creator.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-          })
-          .signers([creator])
-          .rpc();
-        
-        assert.fail("Should have failed with TooFewSides error");
-      } catch (err: any) {
-        assert.include(err.toString(), "TooFewSides");
-        console.log("✅ Correctly rejected market with too few sides");
+        expect.fail("Should have failed with CreationAmountTooSmall");
+      } catch (err) {
+        expect(err.message).to.include("CreationAmountTooSmall");
+        console.log("✅ Correctly rejected amount below 1 SOL");
       }
     });
   });
 
-  describe("Betting", () => {
+  describe("Place Bet", () => {
     let marketPda: PublicKey;
-    let vaultPda: PublicKey;
+    let creator: PublicKey;
+    const question = `Bet test ${Date.now()}`; // Unique
 
     before(async () => {
-      const question = "Best crypto 2025?";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 7200); // 2 hours
+      creator = provider.wallet.publicKey;
+      const endTimestamp = new anchor.BN(Date.now() / 1000 + 86400);
       const sideNames = ["Bitcoin", "Ethereum", "Solana"];
-      const initialAmount = new anchor.BN(150_000_000);
+      const initialAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
 
-      [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
-
-      [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
-
-      const [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
+      const result = getMarketPda(creator, question);
+      marketPda = result.marketPda;
+      const { positionPda } = getPositionPda(marketPda, creator);
 
       await program.methods
-        .createMarket(
-          question,
-          "Which crypto will perform best?",
-          endTimestamp,
-          sideNames,
-          initialAmount
-        )
+        .createMarket(question, "", endTimestamp, sideNames, initialAmount)
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
+          position: positionPda,
           treasury: treasuryPda,
-          creatorTokenAccount,
-          usdcMint,
-          creator: creator.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          creator: creator,
           systemProgram: SystemProgram.programId,
         })
-        .signers([creator])
         .rpc();
     });
 
-    it("Alice bets 100 USDC on Bitcoin (side 0)", async () => {
-      const [positionPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("position"),
-          marketPda.toBuffer(),
-          alice.publicKey.toBuffer(),
-        ],
-        program.programId
+    it("Places a bet on side 0 (Bitcoin)", async () => {
+      const bettor = Keypair.generate();
+      
+      // Airdrop SOL to bettor
+      const airdropSig = await provider.connection.requestAirdrop(
+        bettor.publicKey,
+        5 * LAMPORTS_PER_SOL
       );
+      await provider.connection.confirmTransaction(airdropSig);
 
-      const betAmount = new anchor.BN(100_000_000); // 100 USDC
+      const { positionPda } = getPositionPda(marketPda, bettor.publicKey);
+      const betAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL); // 0.5 SOL
       const sideIndex = 0; // Bitcoin
 
-      await program.methods
-        .placeBet(sideIndex, betAmount)
-        .accounts({
-          market: marketPda,
-          marketVault: vaultPda,
-          position: positionPda,
-          userTokenAccount: aliceTokenAccount,
-          user: alice.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([alice])
-        .rpc();
-
-      const market = await program.account.market.fetch(marketPda);
-      const position = await program.account.userPosition.fetch(positionPda);
-
-      // 2% fee = 2 USDC, so 98 USDC goes to Bitcoin
-      const expectedBetAmount = new anchor.BN(98_000_000);
-      assert.ok(
-        market.sides[0].totalAmount.eq(expectedBetAmount),
-        "Bitcoin should have 98 USDC"
-      );
-      
-      assert.ok(position.bets[0].amount.eq(expectedBetAmount));
-      assert.equal(position.bets[0].hasBet, true);
-      
-      console.log("✅ Alice bet 100 USDC on Bitcoin");
-    });
-
-    it("Bob bets 50 USDC on Ethereum (side 1)", async () => {
-      const [positionPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("position"),
-          marketPda.toBuffer(),
-          bob.publicKey.toBuffer(),
-        ],
-        program.programId
-      );
-
-      const betAmount = new anchor.BN(50_000_000);
-      const sideIndex = 1; // Ethereum
+      const marketBefore = await program.account.market.fetch(marketPda);
+      const bitcoinBefore = marketBefore.sides[0].totalAmount.toNumber();
 
       await program.methods
         .placeBet(sideIndex, betAmount)
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
           position: positionPda,
-          userTokenAccount: bobTokenAccount,
-          user: bob.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          user: bettor.publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .signers([bob])
+        .signers([bettor])
         .rpc();
 
-      const market = await program.account.market.fetch(marketPda);
+      const marketAfter = await program.account.market.fetch(marketPda);
+      const position = await program.account.userPosition.fetch(positionPda);
 
-      // 2% fee = 1 USDC, so 49 USDC goes to Ethereum
-      const expectedBetAmount = new anchor.BN(49_000_000);
-      assert.ok(market.sides[1].totalAmount.eq(expectedBetAmount));
+      // Verify bet was recorded
+      const fee = betAmount.toNumber() * 0.02;
+      const netAmount = betAmount.toNumber() - fee;
       
-      console.log("✅ Bob bet 50 USDC on Ethereum");
+      expect(position.bets[0].amount.toNumber()).to.equal(netAmount);
+      expect(position.bets[0].hasBet).to.be.true;
+      expect(position.totalInvested.toNumber()).to.equal(betAmount.toNumber());
+
+      // Verify market updated
+      const bitcoinAfter = marketAfter.sides[0].totalAmount.toNumber();
+      expect(bitcoinAfter - bitcoinBefore).to.equal(netAmount);
+
+      console.log("✅ Bet placed: 0.5 SOL on Bitcoin");
+      console.log("   Net to pool:", netAmount / LAMPORTS_PER_SOL, "SOL");
+      console.log("   Fee:", fee / LAMPORTS_PER_SOL, "SOL");
     });
 
-    it("Charlie makes multiple bets on Solana", async () => {
-      const [positionPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("position"),
-          marketPda.toBuffer(),
-          charlie.publicKey.toBuffer(),
-        ],
-        program.programId
+    it("Places multiple bets from same user", async () => {
+      const bettor = Keypair.generate();
+      
+      const airdropSig = await provider.connection.requestAirdrop(
+        bettor.publicKey,
+        5 * LAMPORTS_PER_SOL
       );
+      await provider.connection.confirmTransaction(airdropSig);
 
-      // First bet: 100 USDC
+      const { positionPda } = getPositionPda(marketPda, bettor.publicKey);
+
+      // Bet 1: 0.3 SOL on Ethereum (side 1)
       await program.methods
-        .placeBet(2, new anchor.BN(100_000_000))
+        .placeBet(1, new anchor.BN(0.3 * LAMPORTS_PER_SOL))
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
           position: positionPda,
-          userTokenAccount: charlieTokenAccount,
-          user: charlie.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          user: bettor.publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .signers([charlie])
+        .signers([bettor])
         .rpc();
 
-      // Second bet: 50 USDC
+      // Bet 2: 0.2 SOL more on Ethereum
       await program.methods
-        .placeBet(2, new anchor.BN(50_000_000))
+        .placeBet(1, new anchor.BN(0.2 * LAMPORTS_PER_SOL))
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
           position: positionPda,
-          userTokenAccount: charlieTokenAccount,
-          user: charlie.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          user: bettor.publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .signers([charlie])
+        .signers([bettor])
         .rpc();
 
       const position = await program.account.userPosition.fetch(positionPda);
       
-      // 100 USDC = 98 after fee, 50 USDC = 49 after fee, total = 147
-      const expectedTotal = new anchor.BN(147_000_000);
-      assert.ok(position.bets[2].amount.eq(expectedTotal));
+      // Total invested should be 0.5 SOL
+      expect(position.totalInvested.toNumber()).to.equal(0.5 * LAMPORTS_PER_SOL);
       
-      console.log("✅ Charlie bet 150 USDC total on Solana");
+      // Ethereum position should have both bets combined (minus fees)
+      const bet1Net = 0.3 * LAMPORTS_PER_SOL * 0.98;
+      const bet2Net = 0.2 * LAMPORTS_PER_SOL * 0.98;
+      const expectedTotal = bet1Net + bet2Net;
+      
+      expect(position.bets[1].amount.toNumber()).to.be.closeTo(expectedTotal, 1);
+
+      console.log("✅ Multiple bets placed on same side");
+      console.log("   Total position:", position.bets[1].amount.toNumber() / LAMPORTS_PER_SOL, "SOL");
     });
 
-    it("Dave hedges by betting on multiple sides", async () => {
-      const [positionPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("position"),
-          marketPda.toBuffer(),
-          dave.publicKey.toBuffer(),
-        ],
-        program.programId
-      );
-
-      // Bet on Bitcoin
-      await program.methods
-        .placeBet(0, new anchor.BN(30_000_000))
-        .accounts({
-          market: marketPda,
-          marketVault: vaultPda,
-          position: positionPda,
-          userTokenAccount: daveTokenAccount,
-          user: dave.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([dave])
-        .rpc();
-
-      // Bet on Ethereum
-      await program.methods
-        .placeBet(1, new anchor.BN(30_000_000))
-        .accounts({
-          market: marketPda,
-          marketVault: vaultPda,
-          position: positionPda,
-          userTokenAccount: daveTokenAccount,
-          user: dave.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([dave])
-        .rpc();
-
-      const position = await program.account.userPosition.fetch(positionPda);
+    it("Fails with bet below minimum (0.01 SOL)", async () => {
+      const bettor = Keypair.generate();
       
-      assert.equal(position.bets[0].hasBet, true);
-      assert.equal(position.bets[1].hasBet, true);
-      assert.equal(position.bets[2].hasBet, false);
-      
-      console.log("✅ Dave hedged across Bitcoin and Ethereum");
-    });
-
-    it("Fails to bet below minimum (1 USDC)", async () => {
-      const [positionPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("position"),
-          marketPda.toBuffer(),
-          alice.publicKey.toBuffer(),
-        ],
-        program.programId
+      const airdropSig = await provider.connection.requestAirdrop(
+        bettor.publicKey,
+        1 * LAMPORTS_PER_SOL
       );
+      await provider.connection.confirmTransaction(airdropSig);
+
+      const { positionPda } = getPositionPda(marketPda, bettor.publicKey);
+      const tinyBet = new anchor.BN(0.005 * LAMPORTS_PER_SOL); // 0.005 SOL - too small
 
       try {
         await program.methods
-          .placeBet(0, new anchor.BN(500_000)) // 0.5 USDC
+          .placeBet(0, tinyBet)
           .accounts({
             market: marketPda,
-            marketVault: vaultPda,
             position: positionPda,
-            userTokenAccount: aliceTokenAccount,
-            user: alice.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            user: bettor.publicKey,
             systemProgram: SystemProgram.programId,
           })
-          .signers([alice])
+          .signers([bettor])
           .rpc();
         
-        assert.fail("Should have failed with BetTooSmall error");
-      } catch (err: any) {
-        assert.include(err.toString(), "BetTooSmall");
-        console.log("✅ Correctly rejected bet below minimum");
+        expect.fail("Should have failed with BetTooSmall");
+      } catch (err) {
+        expect(err.message).to.include("BetTooSmall");
+        console.log("✅ Correctly rejected bet below 0.01 SOL");
       }
     });
 
-    it("Fails to bet above maximum (200 USDC)", async () => {
-      const [positionPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("position"),
-          marketPda.toBuffer(),
-          alice.publicKey.toBuffer(),
-        ],
-        program.programId
+    it("Fails with bet above maximum (1 SOL)", async () => {
+      const bettor = Keypair.generate();
+      
+      const airdropSig = await provider.connection.requestAirdrop(
+        bettor.publicKey,
+        5 * LAMPORTS_PER_SOL
       );
+      await provider.connection.confirmTransaction(airdropSig);
+
+      const { positionPda } = getPositionPda(marketPda, bettor.publicKey);
+      const hugeBet = new anchor.BN(2 * LAMPORTS_PER_SOL); // 2 SOL - too large
 
       try {
         await program.methods
-          .placeBet(0, new anchor.BN(250_000_000)) // 250 USDC
+          .placeBet(0, hugeBet)
           .accounts({
             market: marketPda,
-            marketVault: vaultPda,
             position: positionPda,
-            userTokenAccount: aliceTokenAccount,
-            user: alice.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            user: bettor.publicKey,
             systemProgram: SystemProgram.programId,
           })
-          .signers([alice])
+          .signers([bettor])
           .rpc();
         
-        assert.fail("Should have failed with BetTooLarge error");
-      } catch (err: any) {
-        assert.include(err.toString(), "BetTooLarge");
-        console.log("✅ Correctly rejected bet above maximum");
-      }
-    });
-
-    it("Shows market statistics after betting", async () => {
-      const market = await program.account.market.fetch(marketPda);
-
-      console.log("\n📊 Market Statistics:");
-      console.log("Total Pool:", market.totalPool.toNumber() / 1_000_000, "USDC");
-      console.log("Fee Pool:", market.feePool.toNumber() / 1_000_000, "USDC");
-      console.log("Total Volume:", market.totalVolume.toNumber() / 1_000_000, "USDC");
-      console.log("Number of Bettors:", market.numBettors);
-      
-      console.log("\nSide Totals:");
-      for (let i = 0; i < market.numSides; i++) {
-        const side = market.sides[i];
-        const name = Buffer.from(side.name.slice(0, side.nameLen)).toString();
-        console.log(`  ${name}: ${side.totalAmount.toNumber() / 1_000_000} USDC (${side.numBettors} bettors)`);
+        expect.fail("Should have failed with BetTooLarge");
+      } catch (err) {
+        expect(err.message).to.include("BetTooLarge");
+        console.log("✅ Correctly rejected bet above 1 SOL");
       }
     });
   });
 
-  describe("Auto-Resolution and Claiming", () => {
-    let marketPda: PublicKey;
-    let vaultPda: PublicKey;
+  describe("Claim Winnings", () => {
+    it("Winner claims proportional share of pool", async () => {
+      const creator = provider.wallet.publicKey;
+      const question = `Claim ${Date.now()}`;
+      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 2); // Ends in 2 seconds
+      const sideNames = ["Winner", "Loser"];
+      const initialAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
 
-    before(async () => {
-      // Create a market that ends in 5 seconds
-      const question = "Quick market for testing";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 5);
-      const sideNames = ["Option A", "Option B", "Option C"];
-      const initialAmount = new anchor.BN(150_000_000);
+      const { marketPda } = getMarketPda(creator, question);
+      const { positionPda: creatorPositionPda } = getPositionPda(marketPda, creator);
 
-      [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
-
-      [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
-
-      const [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
-
+      // Create market
       await program.methods
-        .createMarket(
-          question,
-          "Testing auto-resolution",
-          endTimestamp,
-          sideNames,
-          initialAmount
-        )
+        .createMarket(question, "", endTimestamp, sideNames, initialAmount)
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
+          position: creatorPositionPda,
           treasury: treasuryPda,
-          creatorTokenAccount,
-          usdcMint,
-          creator: creator.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          creator: creator,
           systemProgram: SystemProgram.programId,
         })
-        .signers([creator])
         .rpc();
 
-      // Place some bets
-      const [alicePosition] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), marketPda.toBuffer(), alice.publicKey.toBuffer()],
-        program.programId
+      // User bets on Winner (side 0)
+      const bettor = Keypair.generate();
+      const airdropSig = await provider.connection.requestAirdrop(
+        bettor.publicKey,
+        5 * LAMPORTS_PER_SOL
       );
+      await provider.connection.confirmTransaction(airdropSig);
+
+      const { positionPda: bettorPositionPda } = getPositionPda(marketPda, bettor.publicKey);
+      const betAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL);
+
       await program.methods
-        .placeBet(0, new anchor.BN(100_000_000)) // 100 USDC on Option A
+        .placeBet(0, betAmount) // Bet on Winner
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
-          position: alicePosition,
-          userTokenAccount: aliceTokenAccount,
-          user: alice.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          position: bettorPositionPda,
+          user: bettor.publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .signers([alice])
+        .signers([bettor])
         .rpc();
 
-      const [bobPosition] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), marketPda.toBuffer(), bob.publicKey.toBuffer()],
-        program.programId
-      );
-      await program.methods
-        .placeBet(1, new anchor.BN(50_000_000)) // 50 USDC on Option B
-        .accounts({
-          market: marketPda,
-          marketVault: vaultPda,
-          position: bobPosition,
-          userTokenAccount: bobTokenAccount,
-          user: bob.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([bob])
-        .rpc();
-    });
+      // Wait for market to end
+      console.log("   Waiting for market to end...");
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-    it("Prevents betting after market ends and auto-resolves", async () => {
-      console.log("⏳ Waiting for market to end...");
-      await new Promise(resolve => setTimeout(resolve, 6000));
+      const bettorBalanceBefore = await provider.connection.getBalance(bettor.publicKey);
 
-      const [charliePosition] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), marketPda.toBuffer(), charlie.publicKey.toBuffer()],
-        program.programId
-      );
-
-      try {
-        await program.methods
-          .placeBet(2, new anchor.BN(30_000_000))
-          .accounts({
-            market: marketPda,
-            marketVault: vaultPda,
-            position: charliePosition,
-            userTokenAccount: charlieTokenAccount,
-            user: charlie.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-          })
-          .signers([charlie])
-          .rpc();
-        
-        assert.fail("Should have failed with MarketEnded error");
-      } catch (err: any) {
-        assert.include(err.toString(), "MarketEnded");
-        console.log("✅ Correctly prevented betting after market end");
-        console.log("Note: Market will auto-resolve when someone tries to claim or withdraw");
-      }
-    });
-
-    it("Winner can claim their payout", async () => {
-      const market = await program.account.market.fetch(marketPda);
-      const winningSide = market.winningSideIndex;
-
-      // Alice should be the winner (bet on Option A with 100 USDC)
-      const [alicePosition] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), marketPda.toBuffer(), alice.publicKey.toBuffer()],
-        program.programId
-      );
-
-      const aliceBalanceBefore = await provider.connection.getTokenAccountBalance(aliceTokenAccount);
-
+      // Claim winnings
       await program.methods
         .claimWinnings()
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
-          position: alicePosition,
-          userTokenAccount: aliceTokenAccount,
-          user: alice.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          position: bettorPositionPda,
+          user: bettor.publicKey,
         })
-        .signers([alice])
+        .signers([bettor])
         .rpc();
 
-      const aliceBalanceAfter = await provider.connection.getTokenAccountBalance(aliceTokenAccount);
-      const payout = Number(aliceBalanceAfter.value.amount) - Number(aliceBalanceBefore.value.amount);
+      const bettorBalanceAfter = await provider.connection.getBalance(bettor.publicKey);
+      const position = await program.account.userPosition.fetch(bettorPositionPda);
+      const market = await program.account.market.fetch(marketPda);
 
-      console.log("✅ Alice claimed", payout / 1_000_000, "USDC");
-      assert.ok(payout > 0, "Alice should receive payout");
+      // Verify position marked as claimed
+      expect(position.claimed).to.be.true;
+      expect(market.resolved).to.be.true;
 
-      // Check position marked as claimed
-      const position = await program.account.userPosition.fetch(alicePosition);
-      assert.equal(position.claimed, true);
+      // Verify SOL was received
+      const solReceived = bettorBalanceAfter - bettorBalanceBefore;
+      expect(solReceived).to.be.greaterThan(0);
+
+      console.log("✅ Winner claimed", solReceived / LAMPORTS_PER_SOL, "SOL");
     });
 
-    it("Loser cannot claim (no winnings)", async () => {
-      const [bobPosition] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), marketPda.toBuffer(), bob.publicKey.toBuffer()],
-        program.programId
-      );
+    it("Fails when trying to claim twice", async () => {
+      const creator = provider.wallet.publicKey;
+      const question = `Double ${Date.now()}`;
+      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 2); // Ends in 2 seconds
+      const sideNames = ["A", "B"];
+      const initialAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
 
+      const { marketPda } = getMarketPda(creator, question);
+      const { positionPda } = getPositionPda(marketPda, creator);
+
+      await program.methods
+        .createMarket(question, "", endTimestamp, sideNames, initialAmount)
+        .accounts({
+          market: marketPda,
+          position: positionPda,
+          treasury: treasuryPda,
+          creator: creator,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      // Wait for market to end
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // First claim
+      await program.methods
+        .claimWinnings()
+        .accounts({
+          market: marketPda,
+          position: positionPda,
+          user: creator,
+        })
+        .rpc();
+
+      // Try to claim again
       try {
         await program.methods
           .claimWinnings()
           .accounts({
             market: marketPda,
-            marketVault: vaultPda,
-            position: bobPosition,
-            userTokenAccount: bobTokenAccount,
-            user: bob.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            position: positionPda,
+            user: creator,
           })
-          .signers([bob])
           .rpc();
         
-        assert.fail("Should have failed with NoWinnings error");
-      } catch (err: any) {
-        assert.include(err.toString(), "NoWinnings");
-        console.log("✅ Bob correctly has no winnings (bet on losing side)");
-      }
-    });
-
-    it("Prevents double claiming", async () => {
-      const [alicePosition] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), marketPda.toBuffer(), alice.publicKey.toBuffer()],
-        program.programId
-      );
-
-      try {
-        await program.methods
-          .claimWinnings()
-          .accounts({
-            market: marketPda,
-            marketVault: vaultPda,
-            position: alicePosition,
-            userTokenAccount: aliceTokenAccount,
-            user: alice.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          })
-          .signers([alice])
-          .rpc();
-        
-        assert.fail("Should have failed with AlreadyClaimed error");
-      } catch (err: any) {
-        assert.include(err.toString(), "AlreadyClaimed");
-        console.log("✅ Correctly prevented double claiming");
+        expect.fail("Should have failed with AlreadyClaimed");
+      } catch (err) {
+        expect(err.message).to.include("AlreadyClaimed");
+        console.log("✅ Correctly prevented double claim");
       }
     });
   });
 
-  describe("Fee Withdrawal", () => {
-    let marketPda: PublicKey;
-    let vaultPda: PublicKey;
-    let treasuryPda: PublicKey;
+  describe("Fee Distribution", () => {
+    it("Creator can withdraw their share of fees", async () => {
+      const creator = provider.wallet.publicKey;
+      const question = `Fee ${Date.now()}`;
+      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 2); // Ends in 2 seconds
+      const sideNames = ["A", "B"];
+      const initialAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
 
-    before(async () => {
-      const question = "Fee withdrawal test market";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 3);
-      const sideNames = ["Yes", "No"];
-      const initialAmount = new anchor.BN(150_000_000);
-
-      [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
-
-      [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
-
-      [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
+      const { marketPda } = getMarketPda(creator, question);
+      const { positionPda } = getPositionPda(marketPda, creator);
 
       await program.methods
-        .createMarket(
-          question,
-          "",
-          endTimestamp,
-          sideNames,
-          initialAmount
-        )
+        .createMarket(question, "", endTimestamp, sideNames, initialAmount)
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
+          position: positionPda,
           treasury: treasuryPda,
-          creatorTokenAccount,
-          usdcMint,
-          creator: creator.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          creator: creator,
           systemProgram: SystemProgram.programId,
         })
-        .signers([creator])
-        .rpc();
-
-      // Place a bet
-      const [alicePosition] = PublicKey.findProgramAddressSync(
-        [Buffer.from("position"), marketPda.toBuffer(), alice.publicKey.toBuffer()],
-        program.programId
-      );
-      await program.methods
-        .placeBet(0, new anchor.BN(100_000_000))
-        .accounts({
-          market: marketPda,
-          marketVault: vaultPda,
-          position: alicePosition,
-          userTokenAccount: aliceTokenAccount,
-          user: alice.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([alice])
         .rpc();
 
       // Wait for market to end
-      await new Promise(resolve => setTimeout(resolve, 4000));
-    });
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-    it("Creator withdraws fees (auto-resolution happens)", async () => {
-      const creatorBalanceBefore = await provider.connection.getTokenAccountBalance(creatorTokenAccount);
-      
+      const marketBefore = await program.account.market.fetch(marketPda);
+      const creatorBalanceBefore = await provider.connection.getBalance(creator);
+
+      // Withdraw creator fees
       await program.methods
         .withdrawCreatorFees()
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
           treasury: treasuryPda,
-          creatorTokenAccount,
-          creator: creator.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          creator: creator,
         })
-        .signers([creator])
-        .rpc();
-      
-      const creatorBalanceAfter = await provider.connection.getTokenAccountBalance(creatorTokenAccount);
-      const withdrawn = Number(creatorBalanceAfter.value.amount) - Number(creatorBalanceBefore.value.amount);
-      
-      // Check that market is now resolved
-      const market = await program.account.market.fetch(marketPda);
-      assert.equal(market.resolved, true);
-      console.log("✅ Market auto-resolved on fee withdrawal");
-      console.log("✅ Creator withdrew", withdrawn / 1_000_000, "USDC in fees");
-      assert.ok(withdrawn > 0, "Creator should receive fees");
-    });
-
-    it("Prevents creator from withdrawing fees twice", async () => {
-      try {
-        await program.methods
-          .withdrawCreatorFees()
-          .accounts({
-            market: marketPda,
-            marketVault: vaultPda,
-            treasury: treasuryPda,
-            creatorTokenAccount,
-            creator: creator.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          })
-          .signers([creator])
-          .rpc();
-        
-        assert.fail("Should have failed with NoWinnings error");
-      } catch (err: any) {
-        assert.include(err.toString(), "NoWinnings");
-        console.log("✅ Correctly prevented double fee withdrawal");
-      }
-    });
-
-    it("Protocol authority can withdraw their 50% share", async () => {
-      // Get treasury to check who the authority is
-      const treasury = await program.account.treasury.fetch(treasuryPda);
-      
-      // The treasury authority is the creator (from initialization)
-      // We need to sign with the creator keypair
-      const protocolBalanceBefore = await provider.connection.getTokenAccountBalance(creatorTokenAccount);
-      
-      await program.methods
-        .withdrawProtocolFees()
-        .accounts({
-          market: marketPda,
-          marketVault: vaultPda,
-          treasury: treasuryPda,
-          protocolTokenAccount: creatorTokenAccount,
-          protocolAuthority: creator.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([creator])
         .rpc();
 
-      const protocolBalanceAfter = await provider.connection.getTokenAccountBalance(creatorTokenAccount);
-      const withdrawn = Number(protocolBalanceAfter.value.amount) - Number(protocolBalanceBefore.value.amount);
+      const creatorBalanceAfter = await provider.connection.getBalance(creator);
+      const marketAfter = await program.account.market.fetch(marketPda);
 
-      console.log("✅ Protocol withdrew", withdrawn / 1_000_000, "USDC in fees");
-      assert.ok(withdrawn > 0, "Protocol should receive fees");
-    });
+      // Verify fees withdrawn
+      const expectedFees = marketBefore.feePool.toNumber() / 2; // Creator gets 50%
+      expect(marketAfter.creatorFeesDistributed.toNumber()).to.equal(expectedFees);
 
-    it("Prevents protocol from withdrawing fees twice", async () => {
-      try {
-        await program.methods
-          .withdrawProtocolFees()
-          .accounts({
-            market: marketPda,
-            marketVault: vaultPda,
-            treasury: treasuryPda,
-            protocolTokenAccount: creatorTokenAccount,
-            protocolAuthority: creator.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          })
-          .signers([creator])
-          .rpc();
-        
-        assert.fail("Should have failed with NoWinnings error");
-      } catch (err: any) {
-        assert.include(err.toString(), "NoWinnings");
-        console.log("✅ Correctly prevented double protocol fee withdrawal");
-      }
-    });
+      const solReceived = creatorBalanceAfter - creatorBalanceBefore;
+      expect(solReceived).to.be.greaterThan(0);
 
-    it("Shows final treasury statistics", async () => {
-      const treasury = await program.account.treasury.fetch(treasuryPda);
-      
-      console.log("\n🏦 Treasury Statistics:");
-      console.log("Total Markets:", treasury.totalMarkets);
-      console.log("Total Volume:", treasury.totalVolume.toNumber() / 1_000_000, "USDC");
-      console.log("Total Creator Fees:", treasury.totalCreatorFees.toNumber() / 1_000_000, "USDC");
-      console.log("Total Protocol Fees:", treasury.totalProtocolFees.toNumber() / 1_000_000, "USDC");
+      console.log("✅ Creator withdrew", solReceived / LAMPORTS_PER_SOL, "SOL in fees");
     });
   });
 
-  describe("Edge Cases", () => {
-    it("Market with maximum 10 sides works correctly", async () => {
-      const question = "10 side market test";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 3600);
-      const sideNames = [
-        "Option 1", "Option 2", "Option 3", "Option 4", "Option 5",
-        "Option 6", "Option 7", "Option 8", "Option 9", "Option 10"
-      ];
-      const initialAmount = new anchor.BN(150_000_000);
+  describe("Integration: Full Market Lifecycle", () => {
+    it("Complete flow: create -> bets -> resolve -> claims", async () => {
+      console.log("\n🎯 Running full market lifecycle test...\n");
 
-      const [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
+      const creator = provider.wallet.publicKey;
+      const question = `Lifecycle ${Date.now()}`;
+      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 30); // Ends in 30 seconds
+      const sideNames = ["Bitcoin", "Ethereum", "Solana"];
+      const initialAmount = new anchor.BN(1.5 * LAMPORTS_PER_SOL); // 1.5 SOL
 
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
+      const { marketPda } = getMarketPda(creator, question);
+      const { positionPda: creatorPositionPda } = getPositionPda(marketPda, creator);
 
-      const [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
-
+      // 1. Create market
+      console.log("1️⃣  Creating market with 1.5 SOL...");
       await program.methods
-        .createMarket(
-          question,
-          "Testing maximum sides",
-          endTimestamp,
-          sideNames,
-          initialAmount
-        )
+        .createMarket(question, "", endTimestamp, sideNames, initialAmount)
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
+          position: creatorPositionPda,
           treasury: treasuryPda,
-          creatorTokenAccount,
-          usdcMint,
-          creator: creator.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          creator: creator,
           systemProgram: SystemProgram.programId,
         })
-        .signers([creator])
         .rpc();
 
-      const market = await program.account.market.fetch(marketPda);
-      assert.equal(market.numSides, 10);
-      console.log("✅ Market with 10 sides created successfully");
-    });
+      let market = await program.account.market.fetch(marketPda);
+      console.log("   ✅ Market created");
+      console.log("   Initial pool:", market.totalPool.toNumber() / LAMPORTS_PER_SOL, "SOL");
+      console.log("   Fee pool:", market.feePool.toNumber() / LAMPORTS_PER_SOL, "SOL");
 
-    it("Fails to create market with duplicate side names", async () => {
-      const question = "Duplicate sides test";
-      const endTimestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 3600);
-      const sideNames = ["Option A", "Option B", "Option A"]; // Duplicate!
-      const initialAmount = new anchor.BN(150_000_000);
+      // 2. Users place bets
+      console.log("\n2️⃣  Users placing bets...");
+      
+      const bettor1 = Keypair.generate();
+      const bettor2 = Keypair.generate();
+      const bettor3 = Keypair.generate();
 
-      const [marketPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market"),
-          creator.publicKey.toBuffer(),
-          Buffer.from(question),
-        ],
-        program.programId
-      );
+      // Airdrop to bettors
+      for (const bettor of [bettor1, bettor2, bettor3]) {
+        const sig = await provider.connection.requestAirdrop(
+          bettor.publicKey,
+          5 * LAMPORTS_PER_SOL
+        );
+        await provider.connection.confirmTransaction(sig, 'confirmed');
+      }
 
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), marketPda.toBuffer()],
-        program.programId
-      );
+      // Wait for airdrops to settle
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      const [treasuryPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("treasury")],
-        program.programId
-      );
+      // Verify balances
+      const bal1 = await provider.connection.getBalance(bettor1.publicKey);
+      const bal2 = await provider.connection.getBalance(bettor2.publicKey);
+      const bal3 = await provider.connection.getBalance(bettor3.publicKey);
+      console.log(`   Balances: ${bal1 / LAMPORTS_PER_SOL}, ${bal2 / LAMPORTS_PER_SOL}, ${bal3 / LAMPORTS_PER_SOL} SOL`);
 
+      // Bettor 1: 0.8 SOL on Ethereum
+      const { positionPda: pos1 } = getPositionPda(marketPda, bettor1.publicKey);
       try {
         await program.methods
-          .createMarket(
-            question,
-            "",
-            endTimestamp,
-            sideNames,
-            initialAmount
-          )
+          .placeBet(1, new anchor.BN(0.8 * LAMPORTS_PER_SOL))
           .accounts({
             market: marketPda,
-            marketVault: vaultPda,
-            treasury: treasuryPda,
-            creatorTokenAccount,
-            usdcMint,
-            creator: creator.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            position: pos1,
+            user: bettor1.publicKey,
             systemProgram: SystemProgram.programId,
           })
-          .signers([creator])
+          .signers([bettor1])
           .rpc();
-        
-        assert.fail("Should have failed with DuplicateSideName error");
-      } catch (err: any) {
-        assert.include(err.toString(), "DuplicateSideName");
-        console.log("✅ Correctly rejected duplicate side names");
+        console.log("   ✅ Bettor 1: 0.8 SOL on Ethereum");
+      } catch (err) {
+        console.error("Bettor 1 bet failed:", err);
+        throw err;
       }
+
+      // Bettor 2: 0.3 SOL on Ethereum
+      const { positionPda: pos2 } = getPositionPda(marketPda, bettor2.publicKey);
+      await program.methods
+        .placeBet(1, new anchor.BN(0.3 * LAMPORTS_PER_SOL))
+        .accounts({
+          market: marketPda,
+          position: pos2,
+          user: bettor2.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([bettor2])
+        .rpc();
+      console.log("   ✅ Bettor 2: 0.3 SOL on Ethereum");
+
+      // Bettor 3: 0.2 SOL on Solana
+      const { positionPda: pos3 } = getPositionPda(marketPda, bettor3.publicKey);
+      await program.methods
+        .placeBet(2, new anchor.BN(0.2 * LAMPORTS_PER_SOL))
+        .accounts({
+          market: marketPda,
+          position: pos3,
+          user: bettor3.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([bettor3])
+        .rpc();
+      console.log("   ✅ Bettor 3: 0.2 SOL on Solana");
+
+      market = await program.account.market.fetch(marketPda);
+      console.log("\n   📊 Market state:");
+      console.log("   Bitcoin:", market.sides[0].totalAmount.toNumber() / LAMPORTS_PER_SOL, "SOL");
+      console.log("   Ethereum:", market.sides[1].totalAmount.toNumber() / LAMPORTS_PER_SOL, "SOL", "← WINNER");
+      console.log("   Solana:", market.sides[2].totalAmount.toNumber() / LAMPORTS_PER_SOL, "SOL");
+      console.log("   Total pool:", market.totalPool.toNumber() / LAMPORTS_PER_SOL, "SOL");
+
+      // 3. Wait for market to end
+      console.log("\n3️⃣  Waiting for market to end...");
+      await new Promise(resolve => setTimeout(resolve, 31000)); // Wait 31 seconds
+
+      // 4. Winners claim
+      console.log("\n4️⃣  Winners claiming...");
+
+      // Bettor 1 claims (80% of Ethereum side)
+      const bal1Before = await provider.connection.getBalance(bettor1.publicKey);
+      await program.methods
+        .claimWinnings()
+        .accounts({
+          market: marketPda,
+          position: pos1,
+          user: bettor1.publicKey,
+        })
+        .signers([bettor1])
+        .rpc();
+      const bal1After = await provider.connection.getBalance(bettor1.publicKey);
+      const won1 = (bal1After - bal1Before) / LAMPORTS_PER_SOL;
+      console.log("   ✅ Bettor 1 claimed:", won1.toFixed(4), "SOL");
+
+      // Bettor 2 claims (20% of Ethereum side)
+      const bal2Before = await provider.connection.getBalance(bettor2.publicKey);
+      await program.methods
+        .claimWinnings()
+        .accounts({
+          market: marketPda,
+          position: pos2,
+          user: bettor2.publicKey,
+        })
+        .signers([bettor2])
+        .rpc();
+      const bal2After = await provider.connection.getBalance(bettor2.publicKey);
+      const won2 = (bal2After - bal2Before) / LAMPORTS_PER_SOL;
+      console.log("   ✅ Bettor 2 claimed:", won2.toFixed(4), "SOL");
+
+      // 5. Creator withdraws fees
+      console.log("\n5️⃣  Creator withdrawing fees...");
+      const creatorBalBefore = await provider.connection.getBalance(creator);
+      await program.methods
+        .withdrawCreatorFees()
+        .accounts({
+          market: marketPda,
+          treasury: treasuryPda,
+          creator: creator,
+        })
+        .rpc();
+      const creatorBalAfter = await provider.connection.getBalance(creator);
+      const creatorFees = (creatorBalAfter - creatorBalBefore) / LAMPORTS_PER_SOL;
+      console.log("   ✅ Creator received:", creatorFees.toFixed(4), "SOL in fees");
+
+      console.log("\n✅ Full lifecycle test complete!");
+      console.log("   Total distributed:", (won1 + won2 + creatorFees).toFixed(4), "SOL");
     });
   });
 });

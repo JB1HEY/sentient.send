@@ -3,18 +3,16 @@
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
-import { getMarketPda, getMarketVaultPda, getTreasuryPda } from '@/lib/anchor';
-import { SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
+import { getMarketPda, getPositionPda, getTreasuryPda } from '@/lib/anchor';
+import { SystemProgram } from '@solana/web3.js';
 import BN from 'bn.js';
 import { 
-  MIN_MARKET_CREATION_USDC, 
+  MIN_MARKET_CREATION_SOL, 
   CREATION_FEE_PERCENT, 
-  USDC_MINT,
   MIN_SIDES,
   MAX_SIDES,
   MAX_SIDE_NAME_LENGTH,
-  USDC_MULTIPLIER
+  LAMPORTS_PER_SOL
 } from '@/lib/constants';
 import Navbar from '@/components/Navbar';
 
@@ -26,13 +24,12 @@ export default function CreatePage() {
   const [description, setDescription] = useState('');
   const [endDate, setEndDate] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [initialAmount, setInitialAmount] = useState(MIN_MARKET_CREATION_USDC.toString());
+  const [initialAmount, setInitialAmount] = useState(MIN_MARKET_CREATION_SOL.toString());
   const [sideNames, setSideNames] = useState<string[]>(['', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Get minimum date (tomorrow)
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split('T')[0];
@@ -60,12 +57,19 @@ export default function CreatePage() {
     setError('');
     setSuccess('');
 
-    if (!publicKey || !program) {
+    console.log('Debug - publicKey:', publicKey?.toString());
+    console.log('Debug - program:', program);
+
+    if (!publicKey) {
       setError('Please connect your wallet first');
       return;
     }
 
-    // Validation
+    if (!program) {
+      setError('Program not initialized. Please reconnect your wallet.');
+      return;
+    }
+
     if (question.length < 10) {
       setError('Question must be at least 10 characters');
       return;
@@ -87,12 +91,11 @@ export default function CreatePage() {
     }
 
     const amountNum = parseFloat(initialAmount);
-    if (amountNum < MIN_MARKET_CREATION_USDC) {
-      setError(`Minimum initial amount is ${MIN_MARKET_CREATION_USDC} USDC`);
+    if (amountNum < MIN_MARKET_CREATION_SOL) {
+      setError(`Minimum initial amount is ${MIN_MARKET_CREATION_SOL} SOL`);
       return;
     }
 
-    // Validate side names
     const validSideNames = sideNames.filter(name => name.trim().length > 0);
     if (validSideNames.length < MIN_SIDES) {
       setError(`You need at least ${MIN_SIDES} options`);
@@ -106,7 +109,6 @@ export default function CreatePage() {
       }
     }
 
-    // Check for duplicates
     const uniqueNames = new Set(validSideNames.map(n => n.toLowerCase()));
     if (uniqueNames.size !== validSideNames.length) {
       setError('Side names must be unique');
@@ -116,38 +118,28 @@ export default function CreatePage() {
     try {
       setLoading(true);
 
-      // Combine date and time
       const endDateTime = new Date(`${endDate}T${endTime}`);
       const endTimestamp = new BN(Math.floor(endDateTime.getTime() / 1000));
 
-      // Check if date is in the future
       if (endDateTime.getTime() <= Date.now()) {
         setError('End date must be in the future');
         setLoading(false);
         return;
       }
 
-      // Get PDAs
       const { marketPda } = getMarketPda(publicKey, question);
-      const { vaultPda } = getMarketVaultPda(marketPda);
+      const { positionPda } = getPositionPda(marketPda, publicKey);
       const { treasuryPda } = getTreasuryPda();
 
-      // Get user's USDC token account
-      const creatorTokenAccount = await getAssociatedTokenAddress(
-        USDC_MINT,
-        publicKey
-      );
-
-      const amountLamports = new BN(amountNum * USDC_MULTIPLIER);
+      const amountLamports = new BN(amountNum * LAMPORTS_PER_SOL);
 
       console.log('Creating market...');
       console.log('Market PDA:', marketPda.toString());
-      console.log('Vault PDA:', vaultPda.toString());
+      console.log('Position PDA:', positionPda.toString());
       console.log('Question:', question);
       console.log('Side names:', validSideNames);
-      console.log('End timestamp:', endTimestamp.toString());
+      console.log('Amount (lamports):', amountLamports.toString());
 
-      // Create market
       const tx = await program.methods
         .createMarket(
           question,
@@ -158,14 +150,10 @@ export default function CreatePage() {
         )
         .accounts({
           market: marketPda,
-          marketVault: vaultPda,
+          position: positionPda,
           treasury: treasuryPda,
-          creatorTokenAccount,
-          usdcMint: USDC_MINT,
           creator: publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
-          rent: SYSVAR_RENT_PUBKEY,
         })
         .rpc();
 
@@ -173,15 +161,13 @@ export default function CreatePage() {
 
       setSuccess(`Market created successfully! Transaction: ${tx.slice(0, 8)}...`);
       
-      // Reset form
       setQuestion('');
       setDescription('');
       setEndDate('');
       setEndTime('');
-      setInitialAmount(MIN_MARKET_CREATION_USDC.toString());
+      setInitialAmount(MIN_MARKET_CREATION_SOL.toString());
       setSideNames(['', '']);
 
-      // Redirect to market page after 2 seconds
       setTimeout(() => {
         window.location.href = `/market/${marketPda.toString()}`;
       }, 2000);
@@ -202,18 +188,16 @@ export default function CreatePage() {
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Create Your Prediction Market
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Create a multi-option market where the side with the most USDC wins everything.
+            Create a multi-option market where the side with the most SOL wins everything.
             2-10 options allowed. Winner takes all.
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h2 className="text-3xl font-bold mb-6 bg-gradient-main bg-clip-text text-transparent">
@@ -247,7 +231,7 @@ export default function CreatePage() {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Market resolves automatically when it ends. The side with the most USDC wins."
+                placeholder="Market resolves automatically when it ends. The side with the most SOL wins."
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition resize-none"
                 rows={4}
                 maxLength={500}
@@ -332,19 +316,19 @@ export default function CreatePage() {
             {/* Initial Amount */}
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Initial Amount (USDC) *
+                Initial Amount (SOL) *
               </label>
               <input
                 type="number"
                 value={initialAmount}
                 onChange={(e) => setInitialAmount(e.target.value)}
-                min={MIN_MARKET_CREATION_USDC}
-                step="1"
+                min={MIN_MARKET_CREATION_SOL}
+                step="0.1"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                 required
               />
               <div className="text-xs text-gray-500 mt-1">
-                Minimum {MIN_MARKET_CREATION_USDC} USDC. This will be added to the total pool.
+                Minimum {MIN_MARKET_CREATION_SOL} SOL. This will be added to the total pool.
               </div>
             </div>
 
@@ -354,19 +338,19 @@ export default function CreatePage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Initial Amount</span>
-                  <span className="font-medium">{initialAmount} USDC</span>
+                  <span className="font-medium">{initialAmount} SOL</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Creation Fee (2%)</span>
-                  <span className="font-medium">{creationFee.toFixed(2)} USDC</span>
+                  <span className="font-medium">{creationFee.toFixed(4)} SOL</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-500">
                   <span>Goes to Pool</span>
-                  <span>{(parseFloat(initialAmount) - creationFee).toFixed(2)} USDC</span>
+                  <span>{(parseFloat(initialAmount) - creationFee).toFixed(4)} SOL</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="font-semibold text-gray-900">Total Cost</span>
-                  <span className="font-bold text-primary">{totalCost} USDC</span>
+                  <span className="font-bold text-primary">{totalCost} SOL</span>
                 </div>
               </div>
             </div>
@@ -382,7 +366,7 @@ export default function CreatePage() {
                 <div className="ml-3">
                   <p className="text-sm text-blue-700">
                     <strong>Winner Takes All:</strong> This market automatically resolves when it ends. 
-                    The side with the most USDC wins, and winners split the entire pool proportionally. 
+                    The side with the most SOL wins, and winners split the entire pool proportionally. 
                     Fees are distributed 50/50 between you and the protocol.
                   </p>
                 </div>
@@ -438,7 +422,7 @@ export default function CreatePage() {
               ) : !publicKey ? (
                 'Connect Wallet First'
               ) : (
-                `Create Market (${totalCost} USDC)`
+                `Create Market (${totalCost} SOL)`
               )}
             </button>
           </div>

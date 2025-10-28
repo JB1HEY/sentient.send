@@ -58,7 +58,7 @@ export default function MarketCard({ market }: MarketCardProps) {
 
           {/* Stats */}
           <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Volume: {market.volume.toFixed(2)} USDC</span>
+            <span>Volume: {market.volume.toFixed(2)} SOL</span>
             <span>{market.numBettors} traders</span>
           </div>
 

@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar';
 import MarketCard from '@/components/MarketCard';
 import { getConnection, decodeSideName } from '@/lib/anchor';
 import { MarketWithPrices } from '@/types/market';
-import { USDC_MULTIPLIER, PROGRAM_ID } from '@/lib/constants';
+import { LAMPORTS_PER_SOL, PROGRAM_ID } from '@/lib/constants';
 import { useAnchorWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
@@ -185,8 +185,8 @@ export default function Home() {
             bump,
             endDate: new Date(endTimestamp.toNumber() * 1000),
             isActive: !resolved && Date.now() < endTimestamp.toNumber() * 1000,
-            totalLiquidity: totalPoolNum / USDC_MULTIPLIER,
-            volume: totalVolume.toNumber() / USDC_MULTIPLIER,
+            totalLiquidity: totalPoolNum / LAMPORTS_PER_SOL,
+            volume: totalVolume.toNumber() / LAMPORTS_PER_SOL,
             sidePrices,
             sideNames,
           };
@@ -228,7 +228,7 @@ export default function Home() {
             Multi-Side Prediction Markets
           </h1>
           <p className="text-xl text-gray-600 mb-8">
-            Create markets with 2-10 options. Winner takes all. Powered by USDC on Solana.
+            Create markets with 2-10 options. Winner takes all. Powered by native SOL on Solana.
           </p>
           <div className="flex justify-center space-x-4">
             <a
@@ -287,7 +287,7 @@ export default function Home() {
             <div className="text-3xl font-bold text-primary mb-2">
               {markets.reduce((acc, m) => acc + (m.volume || 0), 0).toFixed(2)}
             </div>
-            <div className="text-gray-600">Total Volume (USDC)</div>
+            <div className="text-gray-600">Total Volume (SOL)</div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="text-3xl font-bold text-primary mb-2">
