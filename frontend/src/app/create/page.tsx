@@ -3,10 +3,19 @@
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
-import { getMarketPda, getTreasuryPda } from '@/lib/anchor';
-import { SystemProgram } from '@solana/web3.js';
+import { getMarketPda, getMarketVaultPda, getTreasuryPda } from '@/lib/anchor';
+import { SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import BN from 'bn.js';
-import { LAMPORTS_PER_SOL, CREATION_FEE, MIN_LIQUIDITY } from '@/lib/constants';
+import { 
+  MIN_MARKET_CREATION_USDC, 
+  CREATION_FEE_PERCENT, 
+  USDC_MINT,
+  MIN_SIDES,
+  MAX_SIDES,
+  MAX_SIDE_NAME_LENGTH,
+  USDC_MULTIPLIER
+} from '@/lib/constants';
 import Navbar from '@/components/Navbar';
 
 export default function CreatePage() {
@@ -17,7 +26,8 @@ export default function CreatePage() {
   const [description, setDescription] = useState('');
   const [endDate, setEndDate] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [liquidity, setLiquidity] = useState('2');
+  const [initialAmount, setInitialAmount] = useState(MIN_MARKET_CREATION_USDC.toString());
+  const [sideNames, setSideNames] = useState<string[]>(['', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -26,6 +36,24 @@ export default function CreatePage() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split('T')[0];
+
+  function addSide() {
+    if (sideNames.length < MAX_SIDES) {
+      setSideNames([...sideNames, '']);
+    }
+  }
+
+  function removeSide(index: number) {
+    if (sideNames.length > MIN_SIDES) {
+      setSideNames(sideNames.filter((_, i) => i !== index));
+    }
+  }
+
+  function updateSideName(index: number, value: string) {
+    const newSideNames = [...sideNames];
+    newSideNames[index] = value;
+    setSideNames(newSideNames);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,9 +86,30 @@ export default function CreatePage() {
       return;
     }
 
-    const liquidityNum = parseFloat(liquidity);
-    if (liquidityNum < MIN_LIQUIDITY) {
-      setError(`Minimum liquidity is ${MIN_LIQUIDITY} SOL`);
+    const amountNum = parseFloat(initialAmount);
+    if (amountNum < MIN_MARKET_CREATION_USDC) {
+      setError(`Minimum initial amount is ${MIN_MARKET_CREATION_USDC} USDC`);
+      return;
+    }
+
+    // Validate side names
+    const validSideNames = sideNames.filter(name => name.trim().length > 0);
+    if (validSideNames.length < MIN_SIDES) {
+      setError(`You need at least ${MIN_SIDES} options`);
+      return;
+    }
+
+    for (const name of validSideNames) {
+      if (name.length > MAX_SIDE_NAME_LENGTH) {
+        setError(`Side name "${name}" is too long (max ${MAX_SIDE_NAME_LENGTH} characters)`);
+        return;
+      }
+    }
+
+    // Check for duplicates
+    const uniqueNames = new Set(validSideNames.map(n => n.toLowerCase()));
+    if (uniqueNames.size !== validSideNames.length) {
+      setError('Side names must be unique');
       return;
     }
 
@@ -79,14 +128,23 @@ export default function CreatePage() {
       }
 
       // Get PDAs
-      const { marketPda, questionSeed } = getMarketPda(publicKey, question);
-      const treasuryPda = getTreasuryPda();
+      const { marketPda } = getMarketPda(publicKey, question);
+      const { vaultPda } = getMarketVaultPda(marketPda);
+      const { treasuryPda } = getTreasuryPda();
 
-      const liquidityLamports = new BN(liquidityNum * LAMPORTS_PER_SOL);
+      // Get user's USDC token account
+      const creatorTokenAccount = await getAssociatedTokenAddress(
+        USDC_MINT,
+        publicKey
+      );
+
+      const amountLamports = new BN(amountNum * USDC_MULTIPLIER);
 
       console.log('Creating market...');
       console.log('Market PDA:', marketPda.toString());
+      console.log('Vault PDA:', vaultPda.toString());
       console.log('Question:', question);
+      console.log('Side names:', validSideNames);
       console.log('End timestamp:', endTimestamp.toString());
 
       // Create market
@@ -95,14 +153,19 @@ export default function CreatePage() {
           question,
           description,
           endTimestamp,
-          liquidityLamports,
-          questionSeed
+          validSideNames,
+          amountLamports
         )
         .accounts({
           market: marketPda,
+          marketVault: vaultPda,
           treasury: treasuryPda,
+          creatorTokenAccount,
+          usdcMint: USDC_MINT,
           creator: publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
         })
         .rpc();
 
@@ -115,7 +178,8 @@ export default function CreatePage() {
       setDescription('');
       setEndDate('');
       setEndTime('');
-      setLiquidity('2');
+      setInitialAmount(MIN_MARKET_CREATION_USDC.toString());
+      setSideNames(['', '']);
 
       // Redirect to market page after 2 seconds
       setTimeout(() => {
@@ -130,7 +194,8 @@ export default function CreatePage() {
     }
   }
 
-  const totalCost = parseFloat(liquidity) + CREATION_FEE;
+  const creationFee = parseFloat(initialAmount) * (CREATION_FEE_PERCENT / 100);
+  const totalCost = parseFloat(initialAmount);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -143,8 +208,8 @@ export default function CreatePage() {
             Create Your Prediction Market
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Launch a prediction market on any future event. Users can bet YES or NO, 
-            and you'll resolve it when the event concludes.
+            Create a multi-option market where the side with the most USDC wins everything.
+            2-10 options allowed. Winner takes all.
           </p>
         </div>
 
@@ -152,7 +217,7 @@ export default function CreatePage() {
         <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h2 className="text-3xl font-bold mb-6 bg-gradient-main bg-clip-text text-transparent">
-              Create Prediction Market
+              Create Multi-Side Market
             </h2>
 
             {/* Question */}
@@ -164,7 +229,7 @@ export default function CreatePage() {
                 type="text"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Will Bitcoin reach $100k by end of 2025?"
+                placeholder="Who will win the 2024 election?"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                 maxLength={200}
                 required
@@ -182,13 +247,56 @@ export default function CreatePage() {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Resolves YES if BTC hits $100k before Dec 31, 2025..."
+                placeholder="Market resolves automatically when it ends. The side with the most USDC wins."
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition resize-none"
                 rows={4}
                 maxLength={500}
               />
               <div className="text-xs text-gray-500 mt-1">
                 {description.length}/500 characters
+              </div>
+            </div>
+
+            {/* Side Names */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Options ({sideNames.length}/{MAX_SIDES}) *
+              </label>
+              <div className="space-y-2">
+                {sideNames.map((name, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => updateSideName(index, e.target.value)}
+                      placeholder={`Option ${index + 1} (e.g., "Donald Trump")`}
+                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
+                      maxLength={MAX_SIDE_NAME_LENGTH}
+                      required
+                    />
+                    {sideNames.length > MIN_SIDES && (
+                      <button
+                        type="button"
+                        onClick={() => removeSide(index)}
+                        className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {sideNames.length < MAX_SIDES && (
+                <button
+                  type="button"
+                  onClick={addSide}
+                  className="mt-2 px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition text-sm font-semibold"
+                >
+                  + Add Option
+                </button>
+              )}
+              <div className="text-xs text-gray-500 mt-2">
+                Each option can be up to {MAX_SIDE_NAME_LENGTH} characters. Names must be unique.
               </div>
             </div>
 
@@ -221,22 +329,22 @@ export default function CreatePage() {
               </div>
             </div>
 
-            {/* Initial Liquidity */}
+            {/* Initial Amount */}
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Initial Liquidity (SOL) *
+                Initial Amount (USDC) *
               </label>
               <input
                 type="number"
-                value={liquidity}
-                onChange={(e) => setLiquidity(e.target.value)}
-                min={MIN_LIQUIDITY}
-                step="0.1"
+                value={initialAmount}
+                onChange={(e) => setInitialAmount(e.target.value)}
+                min={MIN_MARKET_CREATION_USDC}
+                step="1"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                 required
               />
               <div className="text-xs text-gray-500 mt-1">
-                Minimum {MIN_LIQUIDITY} SOL. This will be split 50/50 between YES and NO pools.
+                Minimum {MIN_MARKET_CREATION_USDC} USDC. This will be added to the total pool.
               </div>
             </div>
 
@@ -245,16 +353,20 @@ export default function CreatePage() {
               <h3 className="font-semibold text-gray-900 mb-3">Cost Breakdown</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Initial Liquidity</span>
-                  <span className="font-medium">{liquidity} SOL</span>
+                  <span className="text-gray-600">Initial Amount</span>
+                  <span className="font-medium">{initialAmount} USDC</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Creation Fee</span>
-                  <span className="font-medium">{CREATION_FEE} SOL</span>
+                  <span className="text-gray-600">Creation Fee (2%)</span>
+                  <span className="font-medium">{creationFee.toFixed(2)} USDC</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Goes to Pool</span>
+                  <span>{(parseFloat(initialAmount) - creationFee).toFixed(2)} USDC</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
                   <span className="font-semibold text-gray-900">Total Cost</span>
-                  <span className="font-bold text-primary">{totalCost.toFixed(1)} SOL</span>
+                  <span className="font-bold text-primary">{totalCost} USDC</span>
                 </div>
               </div>
             </div>
@@ -269,8 +381,9 @@ export default function CreatePage() {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm text-blue-700">
-                    <strong>Note:</strong> Only you (the creator) can resolve this market after it ends. 
-                    Make sure you'll be available to resolve it at the end date!
+                    <strong>Winner Takes All:</strong> This market automatically resolves when it ends. 
+                    The side with the most USDC wins, and winners split the entire pool proportionally. 
+                    Fees are distributed 50/50 between you and the protocol.
                   </p>
                 </div>
               </div>
@@ -325,70 +438,11 @@ export default function CreatePage() {
               ) : !publicKey ? (
                 'Connect Wallet First'
               ) : (
-                `Create Market (${totalCost.toFixed(1)} SOL)`
+                `Create Market (${totalCost} USDC)`
               )}
             </button>
           </div>
         </form>
-
-        {/* How It Works */}
-        <div className="max-w-2xl mx-auto mt-16">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-            How It Works
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="bg-gradient-main text-white w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
-                1
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Create Market</h3>
-              <p className="text-sm text-gray-600">
-                Ask a yes/no question about a future event and set an end date
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="bg-gradient-main text-white w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
-                2
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Users Trade</h3>
-              <p className="text-sm text-gray-600">
-                People bet YES or NO. Prices adjust automatically based on demand
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="bg-gradient-main text-white w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
-                3
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-2">Resolve & Payout</h3>
-              <p className="text-sm text-gray-600">
-                After the event, you resolve the market and winners get paid out
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Tips */}
-        <div className="max-w-2xl mx-auto mt-12 bg-white rounded-lg shadow p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">💡 Tips for Great Markets</h3>
-          <ul className="space-y-2 text-sm text-gray-600">
-            <li className="flex items-start">
-              <span className="text-primary mr-2">•</span>
-              <span><strong>Be specific:</strong> "Will Bitcoin reach $100k by Dec 31, 2025?" is better than "Will Bitcoin go up?"</span>
-            </li>
-            <li className="flex items-start">
-              <span className="text-primary mr-2">•</span>
-              <span><strong>Clear resolution:</strong> Make sure the outcome will be obvious and verifiable</span>
-            </li>
-            <li className="flex items-start">
-              <span className="text-primary mr-2">•</span>
-              <span><strong>Reasonable timeframe:</strong> Not too short (boring) or too long (people forget)</span>
-            </li>
-            <li className="flex items-start">
-              <span className="text-primary mr-2">•</span>
-              <span><strong>Add liquidity:</strong> More initial liquidity = better pricing = more traders</span>
-            </li>
-          </ul>
-        </div>
       </main>
     </div>
   );

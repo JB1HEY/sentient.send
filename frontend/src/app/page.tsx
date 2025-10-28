@@ -4,15 +4,15 @@ import { useEffect, useState } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import Navbar from '@/components/Navbar';
 import MarketCard from '@/components/MarketCard';
-import { getConnection } from '@/lib/anchor';
-import { MarketWithPrice } from '@/types/market';
-import { LAMPORTS_PER_SOL, PROGRAM_ID } from '@/lib/constants';
+import { getConnection, decodeSideName } from '@/lib/anchor';
+import { MarketWithPrices } from '@/types/market';
+import { USDC_MULTIPLIER, PROGRAM_ID } from '@/lib/constants';
 import { useAnchorWallet } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 
 export default function Home() {
-  const [markets, setMarkets] = useState<MarketWithPrice[]>([]);
+  const [markets, setMarkets] = useState<MarketWithPrices[]>([]);
   const [loading, setLoading] = useState(true);
   const wallet = useAnchorWallet();
 
@@ -27,8 +27,13 @@ export default function Home() {
       
       console.log('Fetching markets from program:', PROGRAM_ID.toString());
       
-      // Get all accounts owned by the program
-      const accounts = await connection.getProgramAccounts(PROGRAM_ID);
+      const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          {
+            dataSize: 1000, // Approximate market account size
+          }
+        ]
+      });
 
       console.log('Found accounts:', accounts.length);
 
@@ -38,130 +43,152 @@ export default function Home() {
         return;
       }
 
-      // Create market data for each account found, trying to decode real data
-      const marketPromises = accounts.map(async ({ pubkey }, index) => {
+      const marketPromises = accounts.map(async ({ pubkey, account }) => {
         try {
-          const accountInfo = await connection.getAccountInfo(pubkey);
-          if (!accountInfo) return null;
-
-          const data = accountInfo.data;
+          const data = account.data;
           
-          // Skip if account is too small to be a market
-          if (data.length < 100) return null;
+          // Skip if too small
+          if (data.length < 200) return null;
 
-          // Try to decode real market data with error handling
-          let question = `Market ${index + 1}`;
-          let description = "Market created on-chain";
-          let endTimestamp = new BN(Date.now() / 1000 + 86400); // Default 1 day
-          let resolved = false;
-          let yesPool = new BN(1000000000);
-          let noPool = new BN(1000000000);
-          let totalVolume = new BN(0);
-          let numBettors = 0;
+          // Basic parsing - read key fields
+          let offset = 8; // Skip discriminator
 
-          try {
-            // Read creator (skip discriminator, start at offset 8)
-            const creator = new PublicKey(data.slice(8, 40));
-            
-            // Try to read question string
-            let offset = 40;
-            const questionLen = data.readUInt32LE(offset);
-            offset += 4;
-            
-            if (questionLen > 0 && questionLen < 500) { // Reasonable length check
-              const questionBytes = data.slice(offset, offset + questionLen);
-              // Only use valid UTF-8 characters
-              const decodedQuestion = new TextDecoder('utf-8', { fatal: false }).decode(questionBytes);
-              if (decodedQuestion && !decodedQuestion.includes('\uFFFD')) {
-                question = decodedQuestion;
-              }
-            }
-            offset += questionLen;
+          // Read creator (32 bytes)
+          const creator = new PublicKey(data.slice(offset, offset + 32));
+          offset += 32;
 
-            // Try to read description
-            const descLen = data.readUInt32LE(offset);
-            offset += 4;
-            
-            if (descLen > 0 && descLen < 1000) { // Reasonable length check
-              const descBytes = data.slice(offset, offset + descLen);
-              const decodedDesc = new TextDecoder('utf-8', { fatal: false }).decode(descBytes);
-              if (decodedDesc && !decodedDesc.includes('\uFFFD')) {
-                description = decodedDesc;
-              }
-            }
-            offset += descLen;
+          // Read question string (4 bytes length + string data)
+          const questionLen = data.readUInt32LE(offset);
+          offset += 4;
+          
+          if (questionLen > 500) return null; // Invalid
+          
+          const questionBytes = data.slice(offset, offset + questionLen);
+          const question = new TextDecoder('utf-8', { fatal: false }).decode(questionBytes);
+          offset += questionLen;
 
-            // Read end_timestamp
-            endTimestamp = new BN(data.slice(offset, offset + 8), 'le');
-            offset += 8;
+          // Read description string
+          const descLen = data.readUInt32LE(offset);
+          offset += 4;
+          
+          if (descLen > 1000) return null; // Invalid
+          
+          const descBytes = data.slice(offset, offset + descLen);
+          const description = new TextDecoder('utf-8', { fatal: false }).decode(descBytes);
+          offset += descLen;
 
-            // Read resolved flag
-            resolved = data[offset] === 1;
+          // Read end_timestamp (i64)
+          const endTimestamp = new BN(data.slice(offset, offset + 8), 'le');
+          offset += 8;
+
+          // Read resolved (bool)
+          const resolved = data[offset] === 1;
+          offset += 1;
+
+          // Read winning_side_index (u8)
+          const winningSideIndex = data[offset];
+          offset += 1;
+
+          // Read total_pool (u64)
+          const totalPool = new BN(data.slice(offset, offset + 8), 'le');
+          offset += 8;
+
+          // Read num_sides (u8)
+          const numSides = data[offset];
+          offset += 1;
+
+          // Read sides array (10 sides, each 63 bytes)
+          const sides = [];
+          const sideNames = [];
+          for (let i = 0; i < numSides && i < 10; i++) {
+            // name: [u8; 50]
+            const nameBytes = Array.from(data.slice(offset, offset + 50));
+            offset += 50;
+
+            // name_len: u8
+            const nameLen = data[offset];
             offset += 1;
 
-            // Skip outcome
-            offset += 1;
-
-            // Read pools
-            yesPool = new BN(data.slice(offset, offset + 8), 'le');
-            offset += 8;
-            noPool = new BN(data.slice(offset, offset + 8), 'le');
+            // total_amount: u64
+            const totalAmount = new BN(data.slice(offset, offset + 8), 'le');
             offset += 8;
 
-            // Skip k (u128)
-            offset += 16;
+            // num_bettors: u32
+            const numBettors = data.readUInt32LE(offset);
+            offset += 4;
 
-            // Skip shares
-            offset += 16;
+            const sideName = decodeSideName(nameBytes, nameLen);
+            sideNames.push(sideName);
 
-            // Skip fees
-            offset += 16;
-
-            // Read total volume
-            totalVolume = new BN(data.slice(offset, offset + 8), 'le');
-            offset += 8;
-
-            // Read num_bettors
-            numBettors = data.readUInt32LE(offset);
-
-          } catch (decodeError) {
-            console.log(`Using default data for market ${index + 1} due to decode error:`, decodeError);
+            sides.push({
+              name: nameBytes,
+              nameLen,
+              totalAmount,
+              numBettors,
+            });
           }
 
-          // Calculate prices
-          const yesPoolNum = yesPool.toNumber();
-          const noPoolNum = noPool.toNumber();
-          const total = yesPoolNum + noPoolNum;
-          const yesPrice = total > 0 ? noPoolNum / total : 0.5;
-          const noPrice = 1 - yesPrice;
+          // Skip remaining empty sides
+          offset += (10 - numSides) * 63;
 
-          const market: MarketWithPrice = {
+          // Read fee_pool (u64)
+          const feePool = new BN(data.slice(offset, offset + 8), 'le');
+          offset += 8;
+
+          // Read creator_fees_distributed (u64)
+          const creatorFeesDistributed = new BN(data.slice(offset, offset + 8), 'le');
+          offset += 8;
+
+          // Read protocol_fees_distributed (u64)
+          const protocolFeesDistributed = new BN(data.slice(offset, offset + 8), 'le');
+          offset += 8;
+
+          // Read total_volume (u64)
+          const totalVolume = new BN(data.slice(offset, offset + 8), 'le');
+          offset += 8;
+
+          // Read num_bettors (u32)
+          const numBettors = data.readUInt32LE(offset);
+          offset += 4;
+
+          // Read creation_amount (u64)
+          const creationAmount = new BN(data.slice(offset, offset + 8), 'le');
+          offset += 8;
+
+          // Read bump (u8)
+          const bump = data[offset];
+
+          // Calculate prices (% of total pool)
+          const totalPoolNum = totalPool.toNumber();
+          const sidePrices = sides.map(side => {
+            if (totalPoolNum === 0) return 0;
+            return (side.totalAmount.toNumber() / totalPoolNum) * 100;
+          });
+
+          const market: MarketWithPrices = {
             publicKey: pubkey,
-            creator: new PublicKey("11111111111111111111111111111111"),
+            creator,
             question,
             description,
             endTimestamp,
             resolved,
-            outcome: false,
-            yesPool,
-            noPool,
-            k: new BN(0),
-            totalYesShares: new BN(0),
-            totalNoShares: new BN(0),
-            treasuryFee: new BN(0),
-            creationFee: new BN(100000000),
+            winningSideIndex,
+            totalPool,
+            numSides,
+            sides,
+            feePool,
+            creatorFeesDistributed,
+            protocolFeesDistributed,
             totalVolume,
             numBettors,
-            questionHash: [],
-            bump: 0,
-            yesPrice,
-            noPrice,
-            yesPricePercent: yesPrice * 100,
-            noPricePercent: noPrice * 100,
+            creationAmount,
+            bump,
             endDate: new Date(endTimestamp.toNumber() * 1000),
             isActive: !resolved && Date.now() < endTimestamp.toNumber() * 1000,
-            totalLiquidity: (yesPoolNum + noPoolNum) / LAMPORTS_PER_SOL,
-            volume: totalVolume.toNumber() / LAMPORTS_PER_SOL,
+            totalLiquidity: totalPoolNum / USDC_MULTIPLIER,
+            volume: totalVolume.toNumber() / USDC_MULTIPLIER,
+            sidePrices,
+            sideNames,
           };
 
           return market;
@@ -172,11 +199,11 @@ export default function Home() {
       });
 
       const marketsData = await Promise.all(marketPromises);
-      const validMarkets = marketsData.filter((m): m is MarketWithPrice => m !== null);
+      const validMarkets = marketsData.filter((m): m is MarketWithPrices => m !== null);
       
-      // Filter to only show markets that haven't ended
+      // Filter to only show active markets
       const activeMarkets = validMarkets.filter(market => 
-        !market.resolved && market.isActive && Date.now() < market.endDate.getTime()
+        !market.resolved && market.isActive
       );
       
       console.log('Total markets found:', validMarkets.length);
@@ -198,10 +225,10 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold bg-gradient-main bg-clip-text text-transparent mb-4">
-            Decentralized Prediction Markets
+            Multi-Side Prediction Markets
           </h1>
           <p className="text-xl text-gray-600 mb-8">
-            Create and trade on any future event. Powered by Solana.
+            Create markets with 2-10 options. Winner takes all. Powered by USDC on Solana.
           </p>
           <div className="flex justify-center space-x-4">
             <a
@@ -260,7 +287,7 @@ export default function Home() {
             <div className="text-3xl font-bold text-primary mb-2">
               {markets.reduce((acc, m) => acc + (m.volume || 0), 0).toFixed(2)}
             </div>
-            <div className="text-gray-600">Total Volume (SOL)</div>
+            <div className="text-gray-600">Total Volume (USDC)</div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="text-3xl font-bold text-primary mb-2">
