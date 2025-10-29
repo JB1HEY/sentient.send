@@ -1,6 +1,6 @@
-# Prediction Market Frontend
+# Sentiment Market Frontend
 
-A modern Next.js application for creating and trading on prediction markets built on Solana.
+A modern Next.js application for creating and trading on sentiment markets built on Solana.
 
 ## 🎯 Overview
 
