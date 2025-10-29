@@ -330,7 +330,7 @@ export default function PortfolioPage() {
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    Your Bets ({positions.length})
+                    Your Sentiments ({positions.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('created')}

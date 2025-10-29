@@ -6,12 +6,12 @@ import { useProgram } from '@/hooks/useProgram';
 import { getPositionPda, getTreasuryPda } from '@/lib/anchor';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
-import { 
-  MIN_BET_SOL,
-  MAX_BET_SOL,
-  LAMPORTS_PER_SOL,
-  BET_FEE_BPS,
-  PROTOCOL_AUTHORITY
+import {
+    MIN_BET_SOL,
+    MAX_BET_SOL,
+    LAMPORTS_PER_SOL,
+    BET_FEE_BPS,
+    PROTOCOL_AUTHORITY
 } from '@/lib/constants';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
@@ -52,7 +52,7 @@ export default function MarketDetailPage() {
 
             // Fetch market using Anchor
             const marketAccount = await program.account.market.fetch(marketPubkey);
-            
+
             if (!marketAccount) {
                 setError('Market not found');
                 setLoading(false);
@@ -73,15 +73,15 @@ export default function MarketDetailPage() {
 
             for (let i = 0; i < market.numSides; i++) {
                 const side = market.sides[i];
-                
+
                 // Decode side name
                 const nameBytes = side.name.slice(0, side.nameLen);
                 const name = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(nameBytes));
                 sideNames.push(name);
-                
+
                 // Calculate percentage
-                const sidePercent = totalPoolNum > 0 
-                    ? (side.totalAmount.toNumber() / totalPoolNum) * 100 
+                const sidePercent = totalPoolNum > 0
+                    ? (side.totalAmount.toNumber() / totalPoolNum) * 100
                     : 0;
                 sidePrices.push(sidePercent);
             }
@@ -180,15 +180,15 @@ export default function MarketDetailPage() {
                 .rpc();
 
             setSuccess(`Bet placed successfully! Transaction: ${tx.slice(0, 8)}...`);
-            
+
             // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
-            
+
             setBetAmount('0.1');
         } catch (err: any) {
             console.error('Error placing bet:', err);
-            
+
             let errorMessage = 'Failed to place bet';
             if (err.message) {
                 if (err.message.includes('insufficient')) {
@@ -203,7 +203,7 @@ export default function MarketDetailPage() {
                     errorMessage = err.message;
                 }
             }
-            
+
             setError(errorMessage);
         } finally {
             setTxLoading(false);
@@ -239,16 +239,16 @@ export default function MarketDetailPage() {
                     skipPreflight: true,
                     commitment: 'confirmed',
                     maxRetries: 3,
-                  });
+                });
 
             setSuccess(`Winnings claimed! Transaction: ${tx.slice(0, 8)}...`);
-            
+
             // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
         } catch (err: any) {
             console.error('Error claiming:', err);
-            
+
             let errorMessage = 'Failed to claim winnings';
             if (err.message) {
                 if (err.message.includes('NoWinnings')) {
@@ -261,7 +261,7 @@ export default function MarketDetailPage() {
                     errorMessage = err.message;
                 }
             }
-            
+
             setError(errorMessage);
         } finally {
             setTxLoading(false);
@@ -291,13 +291,13 @@ export default function MarketDetailPage() {
                 .rpc();
 
             setSuccess(`Market resolved! Transaction: ${tx.slice(0, 8)}...`);
-            
+
             // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
         } catch (err: any) {
             console.error('Error resolving:', err);
-            
+
             let errorMessage = 'Failed to resolve market';
             if (err.message) {
                 if (err.message.includes('MarketNotEnded')) {
@@ -346,13 +346,13 @@ export default function MarketDetailPage() {
                 });
 
             setSuccess(`Creator fees claimed! Transaction: ${tx.slice(0, 8)}...`);
-            
+
             // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
         } catch (err: any) {
             console.error('Error claiming creator fees:', err);
-            
+
             let errorMessage = 'Failed to claim creator fees';
             if (err.message) {
                 if (err.message.includes('MarketNotEnded')) {
@@ -367,7 +367,7 @@ export default function MarketDetailPage() {
                     errorMessage = err.message;
                 }
             }
-            
+
             setError(errorMessage);
         } finally {
             setTxLoading(false);
@@ -426,7 +426,7 @@ export default function MarketDetailPage() {
             <Navbar />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <a href="/" className="text-primary hover:underline mb-6 inline-block">← Back to Markets</a>
-                
+
                 {/* Creator Badge */}
                 {isCreator && (
                     <div className="bg-gradient-main text-white rounded-lg shadow-lg p-4 mb-6">
@@ -459,7 +459,7 @@ export default function MarketDetailPage() {
                         <p className="text-sm text-green-700">{success}</p>
                     </div>
                 )}
-                
+
                 {/* Market Header */}
                 <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
                     <div className="flex justify-between items-start mb-6">
@@ -502,15 +502,14 @@ export default function MarketDetailPage() {
                             const isLeading = idx === leadingSideIndex;
                             const isWinner = market.resolved && idx === market.winningSideIndex;
                             return (
-                                <div 
-                                    key={idx} 
-                                    className={`p-4 rounded-lg border-2 ${
-                                        isWinner 
-                                            ? 'border-green-500 bg-green-50' 
-                                            : isLeading 
-                                                ? 'border-blue-500 bg-blue-50' 
-                                                : 'border-gray-200 bg-white'
-                                    }`}
+                                <div
+                                    key={idx}
+                                    className={`p-4 rounded-lg border-2 ${isWinner
+                                        ? 'border-green-500 bg-green-50'
+                                        : isLeading
+                                            ? 'border-blue-500 bg-blue-50'
+                                            : 'border-gray-200 bg-white'
+                                        }`}
                                 >
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="font-semibold text-gray-900">{name}</div>
@@ -537,22 +536,19 @@ export default function MarketDetailPage() {
 
                     {/* Info Box */}
                     <div className="bg-purple-50 border-l-4 border-purple-500 p-4">
-                        <div className="flex">
-                            <div className="flex-shrink-0">
-                                <svg className="h-5 w-5 text-purple-500" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                            <div className="ml-3">
-                                <p className="text-sm text-purple-700">
-                                    <strong>Winner Takes All:</strong> When this market ends, the side with the most SOL wins. 
-                                    Winners split the entire {market.totalLiquidity.toFixed(2)} SOL pool proportionally. Losers get nothing.
-                                </p>
-                            </div>
+                        {/* ⬇️ was: className="flex" */}
+                        <div className="flex items-start gap-1.5">
+                            {/* ⬇️ drop the outer wrapper and ml-3 on the text */}
+                            <svg className="h-4 w-4 text-purple-500 mt-[2px]" viewBox="0 0 50 50" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                            <p className="text-sm text-purple-700 leading-tight">
+                                <strong>Winner Takes All:</strong> When this market ends, the side with the most SOL wins.
+                                Winners split the entire {market.totalLiquidity.toFixed(2)} SOL pool proportionally. Losers get nothing.
+                            </p>
                         </div>
                     </div>
                 </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left: Betting Interface or Claiming */}
                     <div className="lg:col-span-2">
@@ -560,7 +556,7 @@ export default function MarketDetailPage() {
                             {market.isActive ? (
                                 <>
                                     <h2 className="text-2xl font-bold mb-6">Place Your Bet</h2>
-                                    
+
                                     {/* Select Side */}
                                     <div className="mb-6">
                                         <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -571,11 +567,10 @@ export default function MarketDetailPage() {
                                                 <button
                                                     key={idx}
                                                     onClick={() => setSelectedSide(idx)}
-                                                    className={`p-4 rounded-lg border-2 transition text-left ${
-                                                        selectedSide === idx
-                                                            ? 'border-primary bg-purple-50'
-                                                            : 'border-gray-200 hover:border-primary'
-                                                    }`}
+                                                    className={`p-4 rounded-lg border-2 transition text-left ${selectedSide === idx
+                                                        ? 'border-primary bg-purple-50'
+                                                        : 'border-gray-200 hover:border-primary'
+                                                        }`}
                                                 >
                                                     <div className="flex justify-between items-center">
                                                         <div>
