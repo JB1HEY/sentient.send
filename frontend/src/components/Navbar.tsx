@@ -1,67 +1,95 @@
 'use client';
 
 import Link from 'next/link';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useState } from 'react';
 
 export default function Navbar() {
+  const { publicKey } = useWallet();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   return (
-    <nav className="bg-gradient-main shadow-lg">
+    <nav className="bg-white shadow-md border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-white">🎯 FuSwap</span>
+          <Link 
+            href="/" 
+            className="flex items-center space-x-2 hover:opacity-80 transition"
+          >
+            <div className="text-2xl">🎯</div>
+            <span className="text-xl font-bold bg-gradient-main bg-clip-text text-transparent">
+              FuSwap
+            </span>
           </Link>
 
-          {/* Navigation Links */}
-          <div className="hidden md:flex space-x-8">
-            <Link 
-              href="/" 
-              className="text-white hover:text-gray-200 transition px-3 py-2 rounded-md text-sm font-medium"
+          {/* Right side: Menu Button + Wallet */}
+          <div className="flex items-center space-x-4">
+            {/* Hamburger Menu Button */}
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 rounded-lg hover:bg-gray-100 transition"
             >
-              Markets
-            </Link>
-            <Link 
-              href="/create" 
-              className="text-white hover:text-gray-200 transition px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Create Market
-            </Link>
-            <Link 
-              href="/portfolio" 
-              className="text-white hover:text-gray-200 transition px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Portfolio
-            </Link>
-          </div>
+              <svg 
+                className="w-6 h-6 text-gray-700" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                {isMenuOpen ? (
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M6 18L18 6M6 6l12 12" 
+                  />
+                ) : (
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M4 6h16M4 12h16M4 18h16" 
+                  />
+                )}
+              </svg>
+            </button>
 
-          {/* Wallet Button */}
-          <div className="flex items-center">
-            <WalletMultiButton className="!bg-white !text-primary hover:!bg-gray-100" />
+            {/* Wallet Button */}
+            <WalletMultiButton className="!bg-gradient-main !rounded-lg !font-semibold !px-4 !py-2 hover:!opacity-90 !transition" />
           </div>
         </div>
-      </div>
 
-      {/* Mobile Navigation */}
-      <div className="md:hidden px-4 pb-3 space-y-1">
-        <Link 
-          href="/" 
-          className="block text-white hover:bg-white/10 px-3 py-2 rounded-md text-base font-medium"
-        >
-          Markets
-        </Link>
-        <Link 
-          href="/create" 
-          className="block text-white hover:bg-white/10 px-3 py-2 rounded-md text-base font-medium"
-        >
-          Create Market
-        </Link>
-        <Link 
-          href="/portfolio" 
-          className="block text-white hover:bg-white/10 px-3 py-2 rounded-md text-base font-medium"
-        >
-          Portfolio
-        </Link>
+        {/* Dropdown Menu */}
+        {isMenuOpen && (
+          <div className="absolute right-4 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+            <div className="py-2">
+              <Link
+                href="/"
+                onClick={() => setIsMenuOpen(false)}
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition font-medium"
+              >
+                📊 Markets
+              </Link>
+              <Link
+                href="/create"
+                onClick={() => setIsMenuOpen(false)}
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition font-medium border-t border-gray-100"
+              >
+                ✨ Create Market
+              </Link>
+              {publicKey && (
+                <Link
+                  href="/portfolio"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition font-medium border-t border-gray-100"
+                >
+                  💼 Portfolio
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </nav>
   );

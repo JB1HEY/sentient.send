@@ -239,18 +239,18 @@ export default function CreatePage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Create Your Prediction Market
+            Send it
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Create a multi-option market where the side with the most SOL wins everything.
-            2-10 options allowed. Winner takes all.
+            Create a market where the side with the most SOL wins everything.
+            10 options allowed. Winner takes all.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h2 className="text-3xl font-bold mb-6 bg-gradient-main bg-clip-text text-transparent">
-              Create Multi-Side Market
+              Create Your Market
             </h2>
 
             {/* Wallet Status Indicator */}
@@ -407,42 +407,40 @@ export default function CreatePage() {
 
             {/* Cost Breakdown */}
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <h3 className="font-semibold text-gray-900 mb-3">Cost Breakdown</h3>
+              <h3 className="font-semibold text-gray-900 mb-3">Cost Breakdown </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Initial Amount</span>
+                  <span className="text-gray-600">Initial Amount </span>
                   <span className="font-medium">{initialAmount} SOL</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Creation Fee (2%)</span>
-                  <span className="font-medium">{creationFee.toFixed(4)} SOL</span>
+                  <span className="text-gray-600">Creation Fee (2%) </span>
+                  <span className="font-medium">{creationFee.toFixed(2)} SOL</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>Goes to Pool</span>
-                  <span>{(parseFloat(initialAmount) - creationFee).toFixed(4)} SOL</span>
+                  <span>Goes to Pool </span>
+                  <span>{(parseFloat(initialAmount) - creationFee).toFixed(2)} SOL</span>
                 </div>
                 <div className="border-t pt-2 flex justify-between">
-                  <span className="font-semibold text-gray-900">Total Cost</span>
-                  <span className="font-bold text-primary">{totalCost} SOL</span>
+                  <span className="font-semibold text-gray-900">Total Cost </span>
+                  <span className="font-bold text-primary">{totalCost} SOL </span>
                 </div>
               </div>
             </div>
 
             {/* Info Box */}
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+            <div className="bg-blue-50 border-l-2 border-blue-500 p-2 mb-2">
               <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                <div className="flex items-start gap-1">
+                  <svg className="h-3 w-3 shrink-0 mt-[1px] text-blue-500" viewBox="0 0 50 50" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm text-blue-700">
+                  <p className="m-0 text-xs leading-tight text-blue-700">
                     <strong>Winner Takes All:</strong> This market automatically resolves when it ends. 
                     The side with the most SOL wins, and winners split the entire pool proportionally. 
                     Fees are distributed 50/50 between you and the protocol.
                   </p>
-                </div>
               </div>
             </div>
 

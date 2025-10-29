@@ -147,7 +147,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold bg-gradient-main bg-clip-text text-transparent mb-4">
-            Multi-Side Prediction Markets
+            Sentient
           </h1>
           <p className="text-xl text-gray-600 mb-8">
             Create markets with 2-10 options. Winner takes all. Powered by native SOL on Solana.
