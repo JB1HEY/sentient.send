@@ -36,3 +36,7 @@ export const MAX_SIDE_NAME_LENGTH = 50;
 export const TREASURY_SEED = Buffer.from('treasury');
 export const MARKET_SEED = Buffer.from('market');
 export const POSITION_SEED = Buffer.from('position');
+
+// Protocol authority wallet (receives 50% of fees)
+// TODO: Replace with your actual wallet address
+export const PROTOCOL_AUTHORITY = new PublicKey('GaqSc65GDgxnRbVMj3prSMe5RxhyWenJccmPLYAHT4md');

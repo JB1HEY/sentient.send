@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
-import { getPositionPda } from '@/lib/anchor';
+import { getPositionPda, getTreasuryPda } from '@/lib/anchor';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { 
   MIN_BET_SOL,
   MAX_BET_SOL,
   LAMPORTS_PER_SOL,
-  BET_FEE_BPS
+  BET_FEE_BPS,
+  PROTOCOL_AUTHORITY
 } from '@/lib/constants';
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
@@ -30,6 +31,7 @@ export default function MarketDetailPage() {
     const [txLoading, setTxLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [isCreator, setIsCreator] = useState(false);
 
     useEffect(() => {
         if (marketId && program) {
@@ -58,6 +60,11 @@ export default function MarketDetailPage() {
             }
 
             const market = marketAccount as any;
+
+            // Check if current user is creator
+            if (publicKey) {
+                setIsCreator(market.creator.toString() === publicKey.toString());
+            }
 
             // Calculate prices (% of total pool for each side)
             const totalPoolNum = market.totalPool.toNumber();
@@ -203,7 +210,7 @@ export default function MarketDetailPage() {
         }
     }
 
-    async function handleClaim() {
+    async function handleClaimWinnings() {
         if (!publicKey || !program || !market || !position) {
             setError('Cannot claim');
             return;
@@ -228,7 +235,11 @@ export default function MarketDetailPage() {
                     position: positionPda,
                     user: publicKey,
                 })
-                .rpc();
+                .rpc({
+                    skipPreflight: true,
+                    commitment: 'confirmed',
+                    maxRetries: 3,
+                  });
 
             setSuccess(`Winnings claimed! Transaction: ${tx.slice(0, 8)}...`);
             
@@ -246,6 +257,112 @@ export default function MarketDetailPage() {
                     errorMessage = 'You have already claimed your winnings';
                 } else if (err.message.includes('MarketNotEnded')) {
                     errorMessage = 'Market has not ended yet';
+                } else {
+                    errorMessage = err.message;
+                }
+            }
+            
+            setError(errorMessage);
+        } finally {
+            setTxLoading(false);
+        }
+    }
+
+    async function handleResolveMarket() {
+        if (!publicKey || !program || !market) {
+            setError('Please connect your wallet');
+            return;
+        }
+
+        try {
+            setTxLoading(true);
+            setError('');
+            setSuccess('');
+
+            console.log('Resolving market:', market.publicKey.toString());
+
+            // Call the new resolve_market instruction
+            const tx = await program.methods
+                .resolveMarket()
+                .accounts({
+                    market: market.publicKey,
+                    resolver: publicKey,
+                })
+                .rpc();
+
+            setSuccess(`Market resolved! Transaction: ${tx.slice(0, 8)}...`);
+            
+            // Reload market data
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await loadMarket();
+        } catch (err: any) {
+            console.error('Error resolving:', err);
+            
+            let errorMessage = 'Failed to resolve market';
+            if (err.message) {
+                if (err.message.includes('MarketNotEnded')) {
+                    errorMessage = 'Market has not ended yet';
+                } else {
+                    errorMessage = err.message;
+                }
+            }
+            setError(errorMessage);
+        } finally {
+            setTxLoading(false);
+        }
+    }
+
+    async function handleClaimCreatorFees() {
+        if (!publicKey || !program || !market) {
+            setError('Cannot claim fees');
+            return;
+        }
+
+        try {
+            setTxLoading(true);
+            setError('');
+            setSuccess('');
+
+            const { treasuryPda } = getTreasuryPda();
+
+            console.log('Claiming creator fees:', {
+                market: market.publicKey.toString(),
+                treasury: treasuryPda.toString(),
+                protocolAuthority: PROTOCOL_AUTHORITY.toString(),
+            });
+
+            const tx = await program.methods
+                .claimCreatorFees()
+                .accounts({
+                    market: market.publicKey,
+                    treasury: treasuryPda,
+                    creator: publicKey,
+                    protocolAuthority: PROTOCOL_AUTHORITY,
+                })
+                .rpc({
+                    skipPreflight: true,
+                    commitment: 'confirmed',
+                    maxRetries: 3,
+                });
+
+            setSuccess(`Creator fees claimed! Transaction: ${tx.slice(0, 8)}...`);
+            
+            // Reload market data
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await loadMarket();
+        } catch (err: any) {
+            console.error('Error claiming creator fees:', err);
+            
+            let errorMessage = 'Failed to claim creator fees';
+            if (err.message) {
+                if (err.message.includes('MarketNotEnded')) {
+                    errorMessage = 'Market has not ended yet';
+                } else if (err.message.includes('NoFeesToClaim')) {
+                    errorMessage = 'No fees available to claim';
+                } else if (err.message.includes('FeesAlreadyClaimed')) {
+                    errorMessage = 'Fees already claimed';
+                } else if (err.message.includes('UnauthorizedCreator')) {
+                    errorMessage = 'Only the market creator can claim fees';
                 } else {
                     errorMessage = err.message;
                 }
@@ -299,6 +416,9 @@ export default function MarketDetailPage() {
         return ((userBet.amount.toNumber() / winningSide.totalAmount.toNumber()) * market.totalPool.toNumber()) / LAMPORTS_PER_SOL;
     })() : 0;
 
+    const creatorFeesAvailable = market.feePool.toNumber() / 2 - market.creatorFeesDistributed.toNumber();
+    const hasClaimableCreatorFees = isCreator && market.resolved && creatorFeesAvailable > 0;
+
     const leadingSideIndex = market.sidePrices.indexOf(Math.max(...market.sidePrices));
 
     return (
@@ -306,6 +426,39 @@ export default function MarketDetailPage() {
             <Navbar />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <a href="/" className="text-primary hover:underline mb-6 inline-block">← Back to Markets</a>
+                
+                {/* Creator Badge */}
+                {isCreator && (
+                    <div className="bg-gradient-main text-white rounded-lg shadow-lg p-4 mb-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                                <span className="text-2xl mr-3">🎯</span>
+                                <div>
+                                    <h3 className="font-bold text-lg">You Created This Market</h3>
+                                    <p className="text-sm opacity-90">You earn 50% of all trading fees</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-sm opacity-90">Total Fees</div>
+                                <div className="text-2xl font-bold">
+                                    {(market.feePool.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Error/Success Messages */}
+                {error && (
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                        <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                )}
+                {success && (
+                    <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
+                        <p className="text-sm text-green-700">{success}</p>
+                    </div>
+                )}
                 
                 {/* Market Header */}
                 <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
@@ -333,7 +486,7 @@ export default function MarketDetailPage() {
                                 ) : (
                                     <div className="flex items-center text-sm">
                                         <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                                        <span className="text-gray-600">Market Ended</span>
+                                        <span className="text-gray-600">Market Ended (Awaiting Resolution)</span>
                                     </div>
                                 )}
                                 <span className="text-sm text-gray-500">{market.numBettors} traders</span>
@@ -365,7 +518,7 @@ export default function MarketDetailPage() {
                                             <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded">Leading</span>
                                         )}
                                         {isWinner && (
-                                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded">Winner</span>
+                                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded">Winner 🏆</span>
                                         )}
                                     </div>
                                     <div className="text-2xl font-bold text-primary mb-1">
@@ -401,13 +554,13 @@ export default function MarketDetailPage() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left: Betting Interface */}
+                    {/* Left: Betting Interface or Claiming */}
                     <div className="lg:col-span-2">
                         <div className="bg-white rounded-lg shadow-lg p-6">
-                            <h2 className="text-2xl font-bold mb-6">Place Your Bet</h2>
-                            
                             {market.isActive ? (
                                 <>
+                                    <h2 className="text-2xl font-bold mb-6">Place Your Bet</h2>
+                                    
                                     {/* Select Side */}
                                     <div className="mb-6">
                                         <label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -479,18 +632,6 @@ export default function MarketDetailPage() {
                                         ))}
                                     </div>
 
-                                    {/* Error/Success Messages */}
-                                    {error && (
-                                        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
-                                            <p className="text-sm text-red-700">{error}</p>
-                                        </div>
-                                    )}
-                                    {success && (
-                                        <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-4">
-                                            <p className="text-sm text-green-700">{success}</p>
-                                        </div>
-                                    )}
-
                                     {/* Place Bet Button */}
                                     <button
                                         onClick={handlePlaceBet}
@@ -519,8 +660,27 @@ export default function MarketDetailPage() {
                                     <p className="text-gray-600 mb-4">
                                         {market.resolved
                                             ? `Winner: ${market.sideNames[market.winningSideIndex]}`
-                                            : 'Market has ended. Claim your winnings if you won.'}
+                                            : 'Market has ended but not yet resolved'}
                                     </p>
+                                    {!market.resolved && publicKey && (
+                                        <>
+                                            <p className="text-sm text-gray-500 mb-4">
+                                                Click below to resolve this market and determine the winner
+                                            </p>
+                                            <button
+                                                onClick={handleResolveMarket}
+                                                disabled={txLoading}
+                                                className="bg-gradient-main text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
+                                            >
+                                                {txLoading ? 'Resolving...' : 'Resolve Market'}
+                                            </button>
+                                        </>
+                                    )}
+                                    {!market.resolved && !publicKey && (
+                                        <p className="text-sm text-gray-500">
+                                            Connect wallet to resolve this market
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -528,6 +688,63 @@ export default function MarketDetailPage() {
 
                     {/* Right: Position & Stats */}
                     <div className="space-y-6">
+                        {/* Creator Fee Claiming */}
+                        {isCreator && (
+                            <div className="bg-gradient-main text-white rounded-lg shadow-lg p-6">
+                                <h3 className="text-xl font-bold mb-4 flex items-center">
+                                    <span className="mr-2">💰</span>
+                                    Creator Fees
+                                </h3>
+                                <div className="space-y-3 mb-4">
+                                    <div className="flex justify-between items-center">
+                                        <span className="opacity-90">Total Fee Pool</span>
+                                        <span className="font-semibold">
+                                            {(market.feePool.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="opacity-90">Your Share (50%)</span>
+                                        <span className="font-bold text-2xl">
+                                            {(creatorFeesAvailable / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="opacity-90">Protocol Share (50%)</span>
+                                        <span>
+                                            {(creatorFeesAvailable / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {hasClaimableCreatorFees ? (
+                                    <>
+                                        <button
+                                            onClick={handleClaimCreatorFees}
+                                            disabled={txLoading}
+                                            className="w-full bg-white text-primary py-3 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50 mb-3"
+                                        >
+                                            {txLoading ? 'Claiming...' : `Claim ${(creatorFeesAvailable / LAMPORTS_PER_SOL).toFixed(4)} SOL`}
+                                        </button>
+                                        <p className="text-xs opacity-90 text-center">
+                                            💡 Protocol automatically receives their 50% when you claim
+                                        </p>
+                                    </>
+                                ) : market.creatorFeesDistributed.toNumber() > 0 ? (
+                                    <div className="bg-white bg-opacity-20 rounded-lg p-3 text-center">
+                                        <span className="font-semibold">✓ Fees Claimed</span>
+                                    </div>
+                                ) : market.resolved ? (
+                                    <div className="bg-white bg-opacity-20 rounded-lg p-3 text-center">
+                                        <span>No fees to claim</span>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white bg-opacity-20 rounded-lg p-3 text-center">
+                                        <span>Available after market resolves</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* User Position */}
                         {position && (
                             <div className="bg-white rounded-lg shadow-lg p-6">
@@ -535,9 +752,13 @@ export default function MarketDetailPage() {
                                 <div className="space-y-3 mb-4">
                                     {position.bets.map((bet, idx) => {
                                         if (!bet.hasBet || bet.amount.toNumber() === 0) return null;
+                                        const isWinningSide = market.resolved && idx === market.winningSideIndex;
                                         return (
                                             <div key={idx} className="flex justify-between items-center">
-                                                <span className="text-gray-600">{market.sideNames[idx]}</span>
+                                                <span className="text-gray-600">
+                                                    {market.sideNames[idx]}
+                                                    {isWinningSide && <span className="ml-2">🏆</span>}
+                                                </span>
                                                 <span className="font-semibold">
                                                     {(bet.amount.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                                 </span>
@@ -553,31 +774,31 @@ export default function MarketDetailPage() {
                                     {market.resolved && estimatedPayout > 0 && (
                                         <div className="flex justify-between items-center">
                                             <span className="text-gray-600">Your Payout</span>
-                                            <span className="font-bold text-green-600">
+                                            <span className="font-bold text-green-600 text-xl">
                                                 {estimatedPayout.toFixed(4)} SOL
                                             </span>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* Claim Button */}
+                                {/* Claim Winnings Button */}
                                 {market.resolved && !position.claimed && estimatedPayout > 0 && (
                                     <button
-                                        onClick={handleClaim}
+                                        onClick={handleClaimWinnings}
                                         disabled={txLoading}
                                         className="w-full bg-gradient-main text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
                                     >
-                                        {txLoading ? 'Claiming...' : 'Claim Winnings'}
+                                        {txLoading ? 'Claiming...' : `Claim ${estimatedPayout.toFixed(4)} SOL`}
                                     </button>
                                 )}
 
                                 {position.claimed && (
                                     <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                                        <span className="text-green-700 font-semibold">✓ Claimed</span>
+                                        <span className="text-green-700 font-semibold">✓ Winnings Claimed</span>
                                     </div>
                                 )}
 
-                                {market.resolved && estimatedPayout === 0 && (
+                                {market.resolved && estimatedPayout === 0 && !position.claimed && (
                                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
                                         <span className="text-gray-700">No winnings (bet on losing side)</span>
                                     </div>
@@ -629,6 +850,7 @@ export default function MarketDetailPage() {
                                 <li>• Winners split entire pool</li>
                                 <li>• Losers get nothing</li>
                                 <li>• Auto-resolves when market ends</li>
+                                {isCreator && <li>• Creators earn 50% of trading fees</li>}
                             </ul>
                         </div>
                     </div>

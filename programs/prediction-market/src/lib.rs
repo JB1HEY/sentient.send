@@ -359,6 +359,18 @@ pub mod prediction_market {
 
         Ok(())
     }
+
+    /// Resolve a market (anyone can call this after end_timestamp)
+    pub fn resolve_market(ctx: Context<ResolveMarket>) -> Result<()> {
+        let market = &mut ctx.accounts.market;
+        
+        // Try to resolve
+        try_resolve_market(market)?;
+        
+        require!(market.resolved, ErrorCode::MarketNotEnded);
+        
+        Ok(())
+    }
 }
 
 // Helper function to resolve market
@@ -481,6 +493,14 @@ pub struct ClaimCreatorFees<'info> {
         constraint = protocol_authority.key() == treasury.authority @ ErrorCode::InvalidProtocolAuthority
     )]
     pub protocol_authority: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveMarket<'info> {
+    #[account(mut)]
+    pub market: Account<'info, Market>,
+    
+    pub resolver: Signer<'info>,
 }
 
 #[derive(Accounts)]
