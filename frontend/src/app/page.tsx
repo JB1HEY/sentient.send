@@ -14,6 +14,7 @@ import BN from 'bn.js';
 export default function Home() {
   const [markets, setMarkets] = useState<MarketWithPrices[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const wallet = useAnchorWallet();
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function Home() {
   async function loadMarkets() {
     try {
       setLoading(true);
+      setError('');
       const connection = getConnection();
       
       console.log('Fetching markets from program:', PROGRAM_ID.toString());
@@ -30,7 +32,7 @@ export default function Home() {
       const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
         filters: [
           {
-            dataSize: 1000, // Approximate market account size
+            dataSize: 1500, // Approximate market account size (increased to catch all)
           }
         ]
       });
@@ -38,6 +40,7 @@ export default function Home() {
       console.log('Found accounts:', accounts.length);
 
       if (accounts.length === 0) {
+        console.log('No markets found');
         setMarkets([]);
         setLoading(false);
         return;
@@ -47,10 +50,20 @@ export default function Home() {
         try {
           const data = account.data;
           
-          // Skip if too small
-          if (data.length < 200) return null;
+          // Check discriminator (first 8 bytes)
+          const discriminator = Array.from(data.slice(0, 8));
+          const marketDiscriminator = [219, 190, 213, 55, 0, 227, 198, 154];
+          
+          // Check if this is a Market account
+          const isMarket = discriminator.every((val, idx) => val === marketDiscriminator[idx]);
+          
+          if (!isMarket) {
+            console.log('Skipping non-market account:', pubkey.toString());
+            return null;
+          }
 
-          // Basic parsing - read key fields
+          console.log('Processing market account:', pubkey.toString());
+
           let offset = 8; // Skip discriminator
 
           // Read creator (32 bytes)
@@ -61,7 +74,10 @@ export default function Home() {
           const questionLen = data.readUInt32LE(offset);
           offset += 4;
           
-          if (questionLen > 500) return null; // Invalid
+          if (questionLen > 500) {
+            console.log('Invalid question length:', questionLen);
+            return null;
+          }
           
           const questionBytes = data.slice(offset, offset + questionLen);
           const question = new TextDecoder('utf-8', { fatal: false }).decode(questionBytes);
@@ -71,7 +87,10 @@ export default function Home() {
           const descLen = data.readUInt32LE(offset);
           offset += 4;
           
-          if (descLen > 1000) return null; // Invalid
+          if (descLen > 1000) {
+            console.log('Invalid description length:', descLen);
+            return null;
+          }
           
           const descBytes = data.slice(offset, offset + descLen);
           const description = new TextDecoder('utf-8', { fatal: false }).decode(descBytes);
@@ -96,6 +115,11 @@ export default function Home() {
           // Read num_sides (u8)
           const numSides = data[offset];
           offset += 1;
+
+          if (numSides < 2 || numSides > 10) {
+            console.log('Invalid num_sides:', numSides);
+            return null;
+          }
 
           // Read sides array (10 sides, each 63 bytes)
           const sides = [];
@@ -191,9 +215,17 @@ export default function Home() {
             sideNames,
           };
 
+          console.log('✅ Successfully parsed market:', {
+            question,
+            numSides,
+            sideNames,
+            isActive: market.isActive,
+            resolved,
+          });
+
           return market;
         } catch (err) {
-          console.error('Error processing market:', err);
+          console.error('Error processing account:', pubkey.toString(), err);
           return null;
         }
       });
@@ -208,10 +240,16 @@ export default function Home() {
       
       console.log('Total markets found:', validMarkets.length);
       console.log('Active markets:', activeMarkets.length);
+      
+      if (activeMarkets.length === 0 && validMarkets.length > 0) {
+        console.log('All markets are either resolved or ended');
+      }
+      
       setMarkets(activeMarkets);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading markets:', error);
+      setError(error.message || 'Failed to load markets');
     } finally {
       setLoading(false);
     }
@@ -246,6 +284,22 @@ export default function Home() {
             </button>
           </div>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Markets Grid */}
         <div className="mb-8">

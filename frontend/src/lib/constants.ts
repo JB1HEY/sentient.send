@@ -1,6 +1,6 @@
 import { PublicKey, clusterApiUrl } from '@solana/web3.js';
 
-// Program ID
+// Program ID - This matches your deployed program
 export const PROGRAM_ID = new PublicKey('C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT');
 
 // Network configuration

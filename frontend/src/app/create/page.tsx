@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
 import { getMarketPda, getPositionPda, getTreasuryPda } from '@/lib/anchor';
 import { SystemProgram } from '@solana/web3.js';
@@ -18,6 +18,7 @@ import Navbar from '@/components/Navbar';
 
 export default function CreatePage() {
   const { publicKey, connected } = useWallet();
+  const { connection } = useConnection();
   const program = useProgram();
 
   const [question, setQuestion] = useState('');
@@ -34,7 +35,6 @@ export default function CreatePage() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split('T')[0];
 
-  // Add useEffect to log connection state
   useEffect(() => {
     console.log('Wallet state:', { 
       publicKey: publicKey?.toString(), 
@@ -151,7 +151,14 @@ export default function CreatePage() {
       console.log('Side names:', validSideNames);
       console.log('Amount (lamports):', amountLamports.toString());
 
-      const tx = await program.methods
+      // Get fresh blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+      
+      console.log('Got fresh blockhash:', blockhash);
+      console.log('Sending transaction...');
+
+      // Single method - use RPC with proper options
+      const txSig = await program.methods
         .createMarket(
           question,
           description,
@@ -166,12 +173,17 @@ export default function CreatePage() {
           creator: publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .rpc();
+        .rpc({
+          skipPreflight: true,
+          commitment: 'confirmed',
+          maxRetries: 3,
+        });
 
-      console.log('Transaction signature:', tx);
+      console.log('✅ Transaction confirmed:', txSig);
 
-      setSuccess(`Market created successfully! Transaction: ${tx.slice(0, 8)}...`);
+      setSuccess(`Market created successfully! Transaction: ${txSig.slice(0, 8)}...`);
       
+      // Clear form
       setQuestion('');
       setDescription('');
       setEndDate('');
@@ -179,13 +191,39 @@ export default function CreatePage() {
       setInitialAmount(MIN_MARKET_CREATION_SOL.toString());
       setSideNames(['', '']);
 
-      setTimeout(() => {
-        window.location.href = `/market/${marketPda.toString()}`;
-      }, 2000);
+      // Wait a bit for the transaction to be fully confirmed
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Redirect to market page
+      window.location.href = `/market/${marketPda.toString()}`;
 
     } catch (err: any) {
-      console.error('Error creating market:', err);
-      setError(err.message || 'Failed to create market. Check console for details.');
+      console.error('❌ Error creating market:', err);
+      
+      // Extract detailed error info
+      if (err.logs) {
+        console.error('Transaction logs:', err.logs);
+      }
+      if (err.transactionLogs) {
+        console.error('Transaction logs:', err.transactionLogs);
+      }
+      
+      // User-friendly error messages
+      let errorMessage = 'Failed to create market';
+      
+      if (err.message) {
+        if (err.message.includes('insufficient')) {
+          errorMessage = 'Insufficient SOL balance. You need at least ' + (parseFloat(initialAmount) + 0.05) + ' SOL.';
+        } else if (err.message.includes('already been processed')) {
+          errorMessage = 'Transaction already processed. Please refresh the page and try with a different question.';
+        } else if (err.message.includes('User rejected')) {
+          errorMessage = 'Transaction cancelled.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -244,6 +282,7 @@ export default function CreatePage() {
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                 maxLength={200}
                 required
+                disabled={loading}
               />
               <div className="text-xs text-gray-500 mt-1">
                 {question.length}/200 characters
@@ -262,6 +301,7 @@ export default function CreatePage() {
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition resize-none"
                 rows={4}
                 maxLength={500}
+                disabled={loading}
               />
               <div className="text-xs text-gray-500 mt-1">
                 {description.length}/500 characters
@@ -284,12 +324,14 @@ export default function CreatePage() {
                       className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                       maxLength={MAX_SIDE_NAME_LENGTH}
                       required
+                      disabled={loading}
                     />
                     {sideNames.length > MIN_SIDES && (
                       <button
                         type="button"
                         onClick={() => removeSide(index)}
                         className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                        disabled={loading}
                       >
                         Remove
                       </button>
@@ -302,6 +344,7 @@ export default function CreatePage() {
                   type="button"
                   onClick={addSide}
                   className="mt-2 px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition text-sm font-semibold"
+                  disabled={loading}
                 >
                   + Add Option
                 </button>
@@ -324,6 +367,7 @@ export default function CreatePage() {
                   min={minDate}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                   required
+                  disabled={loading}
                 />
               </div>
               <div>
@@ -336,6 +380,7 @@ export default function CreatePage() {
                   onChange={(e) => setEndTime(e.target.value)}
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -353,6 +398,7 @@ export default function CreatePage() {
                 step="0.1"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
                 required
+                disabled={loading}
               />
               <div className="text-xs text-gray-500 mt-1">
                 Minimum {MIN_MARKET_CREATION_SOL} SOL. This will be added to the total pool.
@@ -444,7 +490,7 @@ export default function CreatePage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Creating Market...
+                  Creating Market... (Do not close)
                 </span>
               ) : !publicKey ? (
                 'Connect Wallet First'
@@ -454,6 +500,14 @@ export default function CreatePage() {
                 `Create Market (${totalCost} SOL)`
               )}
             </button>
+
+            {loading && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800 text-center">
+                  ⚠️ Please confirm the transaction in Phantom and wait for confirmation. This may take 10-30 seconds.
+                </p>
+              </div>
+            )}
           </div>
         </form>
       </main>

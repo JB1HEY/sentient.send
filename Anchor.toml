@@ -6,13 +6,13 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-prediction_market = "2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ"
+prediction_market = "C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT"
 
 [programs.localnet]
-prediction_market = "2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ"
+prediction_market = "C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT"
 
 [programs.mainnet]
-prediction_market = "2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ"
+prediction_market = "C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT"
 
 [registry]
 url = "https://api.apr.dev"
@@ -23,6 +23,8 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+init-treasury = "node -r ts-node/register init-treasury.ts"
 
 [test.validator]
 reset = true
+

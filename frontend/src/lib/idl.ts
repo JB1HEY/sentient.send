@@ -9,16 +9,7 @@ export const IDL = {
   "instructions": [
     {
       "name": "claim_winnings",
-      "discriminator": [
-        161,
-        215,
-        24,
-        59,
-        14,
-        236,
-        242,
-        221
-      ],
+      "discriminator": [161, 215, 24, 59, 14, 236, 242, 221],
       "accounts": [
         {
           "name": "market",
@@ -31,16 +22,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
+                "value": [112, 111, 115, 105, 116, 105, 111, 110]
               },
               {
                 "kind": "account",
@@ -63,16 +45,7 @@ export const IDL = {
     },
     {
       "name": "create_market",
-      "discriminator": [
-        103,
-        226,
-        97,
-        235,
-        200,
-        188,
-        251,
-        254
-      ],
+      "discriminator": [103, 226, 97, 235, 200, 188, 251, 254],
       "accounts": [
         {
           "name": "market",
@@ -81,14 +54,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116
-                ]
+                "value": [109, 97, 114, 107, 101, 116]
               },
               {
                 "kind": "account",
@@ -108,16 +74,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
+                "value": [112, 111, 115, 105, 116, 105, 111, 110]
               },
               {
                 "kind": "account",
@@ -137,16 +94,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  116,
-                  114,
-                  101,
-                  97,
-                  115,
-                  117,
-                  114,
-                  121
-                ]
+                "value": [116, 114, 101, 97, 115, 117, 114, 121]
               }
             ]
           }
@@ -188,16 +136,7 @@ export const IDL = {
     },
     {
       "name": "initialize_treasury",
-      "discriminator": [
-        124,
-        186,
-        211,
-        195,
-        85,
-        165,
-        129,
-        166
-      ],
+      "discriminator": [124, 186, 211, 195, 85, 165, 129, 166],
       "accounts": [
         {
           "name": "treasury",
@@ -206,16 +145,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  116,
-                  114,
-                  101,
-                  97,
-                  115,
-                  117,
-                  114,
-                  121
-                ]
+                "value": [116, 114, 101, 97, 115, 117, 114, 121]
               }
             ]
           }
@@ -234,16 +164,7 @@ export const IDL = {
     },
     {
       "name": "place_bet",
-      "discriminator": [
-        222,
-        62,
-        67,
-        220,
-        63,
-        166,
-        126,
-        33
-      ],
+      "discriminator": [222, 62, 67, 220, 63, 166, 126, 33],
       "accounts": [
         {
           "name": "market",
@@ -256,16 +177,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
+                "value": [112, 111, 115, 105, 116, 105, 111, 110]
               },
               {
                 "kind": "account",
@@ -301,16 +213,7 @@ export const IDL = {
     },
     {
       "name": "withdraw_creator_fees",
-      "discriminator": [
-        8,
-        30,
-        213,
-        18,
-        121,
-        105,
-        129,
-        222
-      ],
+      "discriminator": [8, 30, 213, 18, 121, 105, 129, 222],
       "accounts": [
         {
           "name": "market",
@@ -323,16 +226,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  116,
-                  114,
-                  101,
-                  97,
-                  115,
-                  117,
-                  114,
-                  121
-                ]
+                "value": [116, 114, 101, 97, 115, 117, 114, 121]
               }
             ]
           }
@@ -347,16 +241,7 @@ export const IDL = {
     },
     {
       "name": "withdraw_protocol_fees",
-      "discriminator": [
-        11,
-        68,
-        165,
-        98,
-        18,
-        208,
-        134,
-        73
-      ],
+      "discriminator": [11, 68, 165, 98, 18, 208, 134, 73],
       "accounts": [
         {
           "name": "market",
@@ -368,16 +253,7 @@ export const IDL = {
             "seeds": [
               {
                 "kind": "const",
-                "value": [
-                  116,
-                  114,
-                  101,
-                  97,
-                  115,
-                  117,
-                  114,
-                  121
-                ]
+                "value": [116, 114, 101, 97, 115, 117, 114, 121]
               }
             ]
           }
@@ -394,42 +270,15 @@ export const IDL = {
   "accounts": [
     {
       "name": "Market",
-      "discriminator": [
-        219,
-        190,
-        213,
-        55,
-        0,
-        227,
-        198,
-        154
-      ]
+      "discriminator": [219, 190, 213, 55, 0, 227, 198, 154]
     },
     {
       "name": "Treasury",
-      "discriminator": [
-        238,
-        239,
-        123,
-        238,
-        89,
-        1,
-        168,
-        253
-      ]
+      "discriminator": [238, 239, 123, 238, 89, 1, 168, 253]
     },
     {
       "name": "UserPosition",
-      "discriminator": [
-        251,
-        248,
-        209,
-        245,
-        83,
-        234,
-        17,
-        27
-      ]
+      "discriminator": [251, 248, 209, 245, 83, 234, 17, 27]
     }
   ],
   "errors": [
@@ -609,10 +458,7 @@ export const IDL = {
           {
             "name": "name",
             "type": {
-              "array": [
-                "u8",
-                50
-              ]
+              "array": ["u8", 50]
             }
           },
           {
@@ -720,6 +566,6 @@ export const IDL = {
       }
     }
   ]
-}
+} as const;
 
 export type PredictionMarketIDL = typeof IDL;
