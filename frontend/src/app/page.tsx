@@ -4,251 +4,135 @@ import { useEffect, useState } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import Navbar from '@/components/Navbar';
 import MarketCard from '@/components/MarketCard';
-import { getConnection, decodeSideName } from '@/lib/anchor';
 import { MarketWithPrices } from '@/types/market';
-import { LAMPORTS_PER_SOL, PROGRAM_ID } from '@/lib/constants';
-import { useAnchorWallet } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
-import BN from 'bn.js';
+import { LAMPORTS_PER_SOL } from '@/lib/constants';
+import { useProgram } from '@/hooks/useProgram';
 
 export default function Home() {
   const [markets, setMarkets] = useState<MarketWithPrices[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const wallet = useAnchorWallet();
+  const program = useProgram();
 
   useEffect(() => {
-    loadMarkets();
-  }, []);
+    if (program) {
+      loadMarkets();
+    }
+  }, [program]);
 
   async function loadMarkets() {
     try {
       setLoading(true);
       setError('');
-      const connection = getConnection();
       
-      console.log('Fetching markets from program:', PROGRAM_ID.toString());
+      if (!program) {
+        console.log('❌ Program not initialized yet');
+        return;
+      }
+
+      console.log('🔍 Fetching markets from program:', program.programId.toString());
       
-      const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [
-          {
-            dataSize: 1500, // Approximate market account size (increased to catch all)
-          }
-        ]
-      });
+      // Use Anchor's built-in account fetcher instead of manual parsing
+      // This is much more reliable and handles all the complexity
+      const marketAccounts = await program.account.market.all();
+      
+      console.log('✅ Found', marketAccounts.length, 'total market accounts');
 
-      console.log('Found accounts:', accounts.length);
-
-      if (accounts.length === 0) {
-        console.log('No markets found');
+      if (marketAccounts.length === 0) {
+        console.log('ℹ️ No markets found on chain');
         setMarkets([]);
         setLoading(false);
         return;
       }
 
-      const marketPromises = accounts.map(async ({ pubkey, account }) => {
+      const marketsWithPrices: MarketWithPrices[] = [];
+
+      for (const { publicKey, account } of marketAccounts) {
         try {
-          const data = account.data;
+          const market = account as any;
           
-          // Check discriminator (first 8 bytes)
-          const discriminator = Array.from(data.slice(0, 8));
-          const marketDiscriminator = [219, 190, 213, 55, 0, 227, 198, 154];
-          
-          // Check if this is a Market account
-          const isMarket = discriminator.every((val, idx) => val === marketDiscriminator[idx]);
-          
-          if (!isMarket) {
-            console.log('Skipping non-market account:', pubkey.toString());
-            return null;
-          }
+          console.log('📊 Processing market:', publicKey.toString());
+          console.log('   Question:', market.question);
+          console.log('   Resolved:', market.resolved);
+          console.log('   End timestamp:', new Date(market.endTimestamp.toNumber() * 1000).toLocaleString());
 
-          console.log('Processing market account:', pubkey.toString());
-
-          let offset = 8; // Skip discriminator
-
-          // Read creator (32 bytes)
-          const creator = new PublicKey(data.slice(offset, offset + 32));
-          offset += 32;
-
-          // Read question string (4 bytes length + string data)
-          const questionLen = data.readUInt32LE(offset);
-          offset += 4;
-          
-          if (questionLen > 500) {
-            console.log('Invalid question length:', questionLen);
-            return null;
-          }
-          
-          const questionBytes = data.slice(offset, offset + questionLen);
-          const question = new TextDecoder('utf-8', { fatal: false }).decode(questionBytes);
-          offset += questionLen;
-
-          // Read description string
-          const descLen = data.readUInt32LE(offset);
-          offset += 4;
-          
-          if (descLen > 1000) {
-            console.log('Invalid description length:', descLen);
-            return null;
-          }
-          
-          const descBytes = data.slice(offset, offset + descLen);
-          const description = new TextDecoder('utf-8', { fatal: false }).decode(descBytes);
-          offset += descLen;
-
-          // Read end_timestamp (i64)
-          const endTimestamp = new BN(data.slice(offset, offset + 8), 'le');
-          offset += 8;
-
-          // Read resolved (bool)
-          const resolved = data[offset] === 1;
-          offset += 1;
-
-          // Read winning_side_index (u8)
-          const winningSideIndex = data[offset];
-          offset += 1;
-
-          // Read total_pool (u64)
-          const totalPool = new BN(data.slice(offset, offset + 8), 'le');
-          offset += 8;
-
-          // Read num_sides (u8)
-          const numSides = data[offset];
-          offset += 1;
-
-          if (numSides < 2 || numSides > 10) {
-            console.log('Invalid num_sides:', numSides);
-            return null;
-          }
-
-          // Read sides array (10 sides, each 63 bytes)
-          const sides = [];
+          // Calculate prices (% of total pool for each side)
+          const totalPoolNum = market.totalPool.toNumber();
+          const sidePrices = [];
           const sideNames = [];
-          for (let i = 0; i < numSides && i < 10; i++) {
-            // name: [u8; 50]
-            const nameBytes = Array.from(data.slice(offset, offset + 50));
-            offset += 50;
 
-            // name_len: u8
-            const nameLen = data[offset];
-            offset += 1;
-
-            // total_amount: u64
-            const totalAmount = new BN(data.slice(offset, offset + 8), 'le');
-            offset += 8;
-
-            // num_bettors: u32
-            const numBettors = data.readUInt32LE(offset);
-            offset += 4;
-
-            const sideName = decodeSideName(nameBytes, nameLen);
-            sideNames.push(sideName);
-
-            sides.push({
-              name: nameBytes,
-              nameLen,
-              totalAmount,
-              numBettors,
-            });
+          for (let i = 0; i < market.numSides; i++) {
+            const side = market.sides[i];
+            
+            // Decode side name
+            const nameBytes = side.name.slice(0, side.nameLen);
+            const name = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(nameBytes));
+            sideNames.push(name);
+            
+            // Calculate percentage
+            const sidePercent = totalPoolNum > 0 
+              ? (side.totalAmount.toNumber() / totalPoolNum) * 100 
+              : 0;
+            sidePrices.push(sidePercent);
           }
 
-          // Skip remaining empty sides
-          offset += (10 - numSides) * 63;
+          const endDate = new Date(market.endTimestamp.toNumber() * 1000);
+          const isActive = !market.resolved && Date.now() < endDate.getTime();
 
-          // Read fee_pool (u64)
-          const feePool = new BN(data.slice(offset, offset + 8), 'le');
-          offset += 8;
-
-          // Read creator_fees_distributed (u64)
-          const creatorFeesDistributed = new BN(data.slice(offset, offset + 8), 'le');
-          offset += 8;
-
-          // Read protocol_fees_distributed (u64)
-          const protocolFeesDistributed = new BN(data.slice(offset, offset + 8), 'le');
-          offset += 8;
-
-          // Read total_volume (u64)
-          const totalVolume = new BN(data.slice(offset, offset + 8), 'le');
-          offset += 8;
-
-          // Read num_bettors (u32)
-          const numBettors = data.readUInt32LE(offset);
-          offset += 4;
-
-          // Read creation_amount (u64)
-          const creationAmount = new BN(data.slice(offset, offset + 8), 'le');
-          offset += 8;
-
-          // Read bump (u8)
-          const bump = data[offset];
-
-          // Calculate prices (% of total pool)
-          const totalPoolNum = totalPool.toNumber();
-          const sidePrices = sides.map(side => {
-            if (totalPoolNum === 0) return 0;
-            return (side.totalAmount.toNumber() / totalPoolNum) * 100;
-          });
-
-          const market: MarketWithPrices = {
-            publicKey: pubkey,
-            creator,
-            question,
-            description,
-            endTimestamp,
-            resolved,
-            winningSideIndex,
-            totalPool,
-            numSides,
-            sides,
-            feePool,
-            creatorFeesDistributed,
-            protocolFeesDistributed,
-            totalVolume,
-            numBettors,
-            creationAmount,
-            bump,
-            endDate: new Date(endTimestamp.toNumber() * 1000),
-            isActive: !resolved && Date.now() < endTimestamp.toNumber() * 1000,
+          const marketWithPrices: MarketWithPrices = {
+            publicKey,
+            creator: market.creator,
+            question: market.question,
+            description: market.description,
+            endTimestamp: market.endTimestamp,
+            resolved: market.resolved,
+            winningSideIndex: market.winningSideIndex,
+            totalPool: market.totalPool,
+            numSides: market.numSides,
+            sides: market.sides,
+            feePool: market.feePool,
+            creatorFeesDistributed: market.creatorFeesDistributed,
+            protocolFeesDistributed: market.protocolFeesDistributed,
+            totalVolume: market.totalVolume,
+            numBettors: market.numBettors,
+            creationAmount: market.creationAmount,
+            bump: market.bump,
+            endDate,
+            isActive,
             totalLiquidity: totalPoolNum / LAMPORTS_PER_SOL,
-            volume: totalVolume.toNumber() / LAMPORTS_PER_SOL,
+            volume: market.totalVolume.toNumber() / LAMPORTS_PER_SOL,
             sidePrices,
             sideNames,
           };
 
-          console.log('✅ Successfully parsed market:', {
-            question,
-            numSides,
-            sideNames,
-            isActive: market.isActive,
-            resolved,
-          });
-
-          return market;
+          console.log('   Status:', isActive ? '✅ Active' : '❌ Inactive/Resolved');
+          console.log('   Sides:', sideNames.join(', '));
+          
+          marketsWithPrices.push(marketWithPrices);
         } catch (err) {
-          console.error('Error processing account:', pubkey.toString(), err);
-          return null;
+          console.error('❌ Error processing market:', publicKey.toString(), err);
         }
-      });
+      }
 
-      const marketsData = await Promise.all(marketPromises);
-      const validMarkets = marketsData.filter((m): m is MarketWithPrices => m !== null);
-      
       // Filter to only show active markets
-      const activeMarkets = validMarkets.filter(market => 
-        !market.resolved && market.isActive
-      );
+      const activeMarkets = marketsWithPrices.filter(m => m.isActive);
       
-      console.log('Total markets found:', validMarkets.length);
-      console.log('Active markets:', activeMarkets.length);
+      console.log('📈 Total markets:', marketsWithPrices.length);
+      console.log('✅ Active markets:', activeMarkets.length);
       
-      if (activeMarkets.length === 0 && validMarkets.length > 0) {
-        console.log('All markets are either resolved or ended');
+      if (activeMarkets.length === 0 && marketsWithPrices.length > 0) {
+        console.log('ℹ️ All markets are either resolved or ended');
       }
       
       setMarkets(activeMarkets);
       
     } catch (error: any) {
-      console.error('Error loading markets:', error);
+      console.error('❌ Error loading markets:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        logs: error.logs,
+      });
       setError(error.message || 'Failed to load markets');
     } finally {
       setLoading(false);
@@ -277,12 +161,19 @@ export default function Home() {
             </a>
             <button
               onClick={loadMarkets}
-              disabled={loading}
+              disabled={loading || !program}
               className="bg-white text-primary border-2 border-primary px-8 py-3 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50"
             >
               {loading ? 'Loading...' : 'Refresh Markets'}
             </button>
           </div>
+          
+          {/* Debug Info */}
+          {!program && (
+            <div className="mt-4 text-sm text-yellow-600">
+              ⚠️ Program not initialized. Please make sure your wallet is connected.
+            </div>
+          )}
         </div>
 
         {/* Error Message */}
@@ -296,6 +187,7 @@ export default function Home() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-red-700">{error}</p>
+                <p className="text-xs text-red-600 mt-1">Check the browser console for more details</p>
               </div>
             </div>
           </div>
@@ -309,6 +201,7 @@ export default function Home() {
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
               <p className="mt-4 text-gray-600">Loading markets...</p>
+              <p className="mt-2 text-sm text-gray-500">This may take a few seconds</p>
             </div>
           ) : markets.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg shadow">

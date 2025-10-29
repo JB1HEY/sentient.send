@@ -301,12 +301,15 @@ pub mod prediction_market {
         Ok(())
     }
 
-    pub fn withdraw_creator_fees(ctx: Context<WithdrawCreatorFees>) -> Result<()> {
-        // Get account info BEFORE creating mutable borrow
-        let market_lamports = ctx.accounts.market.to_account_info();
-        let creator_lamports = ctx.accounts.creator.to_account_info();
-        
+    /// NEW: Single instruction that distributes fees to BOTH creator and protocol
+    pub fn claim_creator_fees(ctx: Context<ClaimCreatorFees>) -> Result<()> {
+        // Get account infos BEFORE any mutable borrows
+        let market_info = ctx.accounts.market.to_account_info();
+        let creator_info = ctx.accounts.creator.to_account_info();
+        let protocol_info = ctx.accounts.protocol_authority.to_account_info();
+
         let market = &mut ctx.accounts.market;
+        let treasury = &mut ctx.accounts.treasury;
 
         // Try to resolve if not resolved yet
         if !market.resolved {
@@ -316,69 +319,42 @@ pub mod prediction_market {
         require!(market.resolved, ErrorCode::MarketNotEnded);
         require!(
             ctx.accounts.creator.key() == market.creator,
-            ErrorCode::UnauthorizedResolver
+            ErrorCode::UnauthorizedCreator
         );
-
-        let creator_share = market
-            .fee_pool
-            .checked_div(2)
-            .ok_or(ErrorCode::MathOverflow)?;
-
-        let remaining_fees = creator_share
-            .checked_sub(market.creator_fees_distributed)
-            .ok_or(ErrorCode::MathOverflow)?;
-
-        require!(remaining_fees > 0, ErrorCode::NoWinnings);
-
-        // Transfer SOL from market to creator (do this before updating market state)
-        **market_lamports.try_borrow_mut_lamports()? -= remaining_fees;
-        **creator_lamports.try_borrow_mut_lamports()? += remaining_fees;
-
-        market.creator_fees_distributed = market
-            .creator_fees_distributed
-            .checked_add(remaining_fees)
-            .ok_or(ErrorCode::MathOverflow)?;
-
-        Ok(())
-    }
-
-    pub fn withdraw_protocol_fees(ctx: Context<WithdrawProtocolFees>) -> Result<()> {
-        // Get account info BEFORE creating mutable borrow
-        let market_lamports = ctx.accounts.market.to_account_info();
-        let protocol_lamports = ctx.accounts.protocol_authority.to_account_info();
-        
-        let market = &mut ctx.accounts.market;
-        let treasury = &ctx.accounts.treasury;
-
-        // Try to resolve if not resolved yet
-        if !market.resolved {
-            try_resolve_market(market)?;
-        }
-
-        require!(market.resolved, ErrorCode::MarketNotEnded);
         require!(
-            ctx.accounts.protocol_authority.key() == treasury.authority,
-            ErrorCode::UnauthorizedResolver
+            market.creator_fees_distributed == 0,
+            ErrorCode::FeesAlreadyClaimed
         );
 
-        let protocol_share = market
-            .fee_pool
+        let total_fees = market.fee_pool;
+        let creator_share = total_fees
             .checked_div(2)
             .ok_or(ErrorCode::MathOverflow)?;
-
-        let remaining_fees = protocol_share
-            .checked_sub(market.protocol_fees_distributed)
+        let protocol_share = total_fees
+            .checked_sub(creator_share)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        require!(remaining_fees > 0, ErrorCode::NoWinnings);
+        require!(creator_share > 0, ErrorCode::NoFeesToClaim);
 
-        // Transfer SOL from market to protocol (do this before updating market state)
-        **market_lamports.try_borrow_mut_lamports()? -= remaining_fees;
-        **protocol_lamports.try_borrow_mut_lamports()? += remaining_fees;
+        // Transfer to creator
+        **market_info.try_borrow_mut_lamports()? -= creator_share;
+        **creator_info.try_borrow_mut_lamports()? += creator_share;
 
-        market.protocol_fees_distributed = market
-            .protocol_fees_distributed
-            .checked_add(remaining_fees)
+        // Transfer to protocol (AUTOMATIC)
+        **market_info.try_borrow_mut_lamports()? -= protocol_share;
+        **protocol_info.try_borrow_mut_lamports()? += protocol_share;
+
+        // Update tracking
+        market.creator_fees_distributed = creator_share;
+        market.protocol_fees_distributed = protocol_share;
+
+        treasury.total_creator_fees = treasury
+            .total_creator_fees
+            .checked_add(creator_share)
+            .ok_or(ErrorCode::MathOverflow)?;
+        treasury.total_protocol_fees = treasury
+            .total_protocol_fees
+            .checked_add(protocol_share)
             .ok_or(ErrorCode::MathOverflow)?;
 
         Ok(())
@@ -485,7 +461,7 @@ pub struct ClaimWinnings<'info> {
 }
 
 #[derive(Accounts)]
-pub struct WithdrawCreatorFees<'info> {
+pub struct ClaimCreatorFees<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
 
@@ -498,21 +474,13 @@ pub struct WithdrawCreatorFees<'info> {
 
     #[account(mut)]
     pub creator: Signer<'info>,
-}
 
-#[derive(Accounts)]
-pub struct WithdrawProtocolFees<'info> {
-    #[account(mut)]
-    pub market: Account<'info, Market>,
-
+    /// CHECK: Protocol authority verified against treasury.authority
     #[account(
-        seeds = [b"treasury"],
-        bump = treasury.bump
+        mut,
+        constraint = protocol_authority.key() == treasury.authority @ ErrorCode::InvalidProtocolAuthority
     )]
-    pub treasury: Account<'info, Treasury>,
-
-    #[account(mut)]
-    pub protocol_authority: Signer<'info>,
+    pub protocol_authority: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -625,6 +593,12 @@ pub enum ErrorCode {
     SideNameTooLong,
     #[msg("Duplicate side names not allowed")]
     DuplicateSideName,
-    #[msg("Only market creator can resolve")]
-    UnauthorizedResolver,
+    #[msg("Only market creator can withdraw creator fees")]
+    UnauthorizedCreator,
+    #[msg("Fees already claimed")]
+    FeesAlreadyClaimed,
+    #[msg("No fees to claim")]
+    NoFeesToClaim,
+    #[msg("Invalid protocol authority")]
+    InvalidProtocolAuthority,
 }
