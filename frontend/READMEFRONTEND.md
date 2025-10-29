@@ -1,181 +1,346 @@
-# Frontend Updates for Sentiment-Based Prediction Market
+# Prediction Market Frontend
 
-## What Changed
+A modern Next.js application for creating and trading on prediction markets built on Solana.
 
-Your smart contract was updated from a traditional binary outcome model to a **sentiment-based proportional payout** model. The frontend needs to be updated to match.
+## 🎯 Overview
 
-## Key Changes
+This frontend allows users to:
+- Browse active prediction markets
+- Create new markets with multiple outcomes
+- Place bets on market outcomes using SOL
+- Track positions and claim winnings
+- Market creators earn 50% of trading fees
 
-1. **Removed `resolve_market` instruction** - Markets now automatically distribute payouts based on final pool ratios (no manual resolution needed)
-2. **Everyone gets paid** - Proportional payouts mean no one loses 100%
-3. **New market detail page** - Was missing from your frontend
+## 🛠️ Tech Stack
 
-## Files to Update
+- **Framework**: Next.js 14 (App Router)
+- **Blockchain**: Solana (Anchor framework)
+- **Wallet**: Solana Wallet Adapter
+- **Styling**: Tailwind CSS
+- **Language**: TypeScript
 
-### 1. `frontend/src/lib/idl.ts` 
-**Replace your existing IDL with:** `idl.ts`
+## 📦 Prerequisites
 
-**What changed:** Removed the `resolve_market` instruction that no longer exists in the smart contract.
+- Node.js 18+ and npm
+- A Solana wallet (Phantom, Solflare, etc.)
+- SOL tokens (devnet or mainnet)
 
-### 2. `frontend/src/app/market/[id]/page.tsx` (NEW!)
-**Add this new file:** `market-[id]-page.tsx`
+## 🚀 Quick Start
 
-This is the market detail page that was missing. It includes:
-- Market information display
-- Real-time YES/NO prices
-- Bet placement interface
-- Position tracking
-- Claim winnings functionality
-- Sentiment-based payout explanation
+### 1. Install Dependencies
 
-### 3. `frontend/.env.example` (OPTIONAL)
-Add environment variable template (create this file with your RPC endpoint and network config).
-
-## How Sentiment-Based Payouts Work
-
-**Traditional model:**
-- Market resolves YES or NO
-- Winners get everything
-- Losers get nothing
-
-**Sentiment-based model:**
-- Market ends (no resolution needed)
-- Everyone gets paid based on their share of their pool
-- Side with higher sentiment (bigger pool) gets more per share
-- Nobody loses everything
-
-**Example:**
-```
-Final State:
-- YES pool: 3,000 SOL (60% sentiment)
-- NO pool: 2,000 SOL (40% sentiment)
-- Total YES shares: 2,500
-- Total NO shares: 1,800
-
-Your Position (YES bettor):
-- You own: 500 YES shares (20% of total YES shares)
-- Your payout: (500 / 2,500) × 3,000 = 600 SOL
-
-Their Position (NO bettor):
-- They own: 450 NO shares (25% of total NO shares)  
-- Their payout: (450 / 1,800) × 2,000 = 500 SOL
-
-Both got paid! Just different amounts based on final sentiment.
-```
-
-## Installation
-
-1. **Copy the files:**
 ```bash
-# Copy updated IDL
-cp idl.ts frontend/src/lib/idl.ts
-
-# Create the market detail directory
-mkdir -p frontend/src/app/market/[id]
-
-# Copy the market detail page
-cp market-[id]-page.tsx frontend/src/app/market/[id]/page.tsx
-```
-
-2. **Update your program ID** in `frontend/src/lib/constants.ts`:
-```typescript
-export const PROGRAM_ID = new PublicKey('YOUR_PROGRAM_ID_HERE');
-// Devnet: 8qXgRQksNnwYLprU4wmfTRJEN2tva4AtS64PyxKn2NNs
-// Localnet: 2Z7sJer7qW1DJcoZQHJ5i96Gw4LxQqRSpPfd33yVhRVZ
-```
-
-3. **Install dependencies** (if needed):
-```bash
-cd frontend
 npm install
 ```
 
-4. **Run the dev server:**
-```bash
-npm run dev
-```
+### 2. Configure Environment
 
-5. **Test it out:**
-- Open http://localhost:3000
-- Connect your wallet
-- Create a market
-- Click on a market to see the new detail page
-- Place some bets
-- Track your position
-- After market ends, claim your winnings
+Create a `.env.local` file:
 
-## Testing on Devnet
-
-```bash
-# Make sure you're on devnet
-solana config set --url devnet
-
-# Get some devnet SOL
-solana airdrop 2
-
-# Your frontend should now be set to devnet in .env.local:
-NEXT_PUBLIC_SOLANA_NETWORK=devnet
+```env
 NEXT_PUBLIC_RPC_ENDPOINT=https://api.devnet.solana.com
+NEXT_PUBLIC_PROGRAM_ID=your_program_id_here
 ```
 
-## What's Different in the UI
+### 3. Set Protocol Authority
 
-### No More Resolution Button
-The market creator no longer needs to resolve the market. When the `end_timestamp` is reached, trading stops and everyone can claim their proportional payout.
+Update `src/lib/constants.ts` with your protocol wallet:
 
-### Claim Button for Everyone
-After a market ends, ALL participants (YES and NO bettors) can claim their proportional share. There's no "winner" and "loser" - everyone gets something based on the final pool ratios.
+```typescript
+export const PROTOCOL_AUTHORITY = new PublicKey('YOUR_WALLET_ADDRESS');
+```
 
-### Sentiment Display
-The UI now shows the final sentiment (% of total pool) rather than a binary outcome.
+### 4. Run Development Server
 
-## Troubleshooting
-
-**"Module not found" errors:**
 ```bash
-rm -rf node_modules .next
-npm install
 npm run dev
 ```
 
-**"Transaction failed" when placing bet:**
-- Check you have enough SOL
-- Make sure market hasn't ended yet
-- Minimum bet is 0.01 SOL
+Visit `http://localhost:3000`
 
-**Market detail page not showing:**
-- Make sure you copied the file to the correct location: `frontend/src/app/market/[id]/page.tsx`
-- The `[id]` folder name must include the square brackets
-
-**Program not found:**
-Make sure your smart contract is deployed and the program ID is correct in `constants.ts`.
-
-## Complete User Flow
-
-1. **Home page** - Browse active markets
-2. **Create page** - Create a new market (0.1 SOL fee + initial liquidity)
-3. **Market detail page** - View market, place bets (YES or NO)
-4. **Position tracking** - See your shares and estimated payout
-5. **Claim winnings** - After market ends, claim your proportional payout
-
-## Architecture
+## 📁 Project Structure
 
 ```
-Frontend (Next.js 14)
-├── Home page (/) - Browse markets
-├── Create page (/create) - Create new market
-├── Market detail (/market/[id]) - Trade & claim ← NEW!
-└── Portfolio (/portfolio) - Your positions
-
-↓ RPC Connection ↓
-
-Smart Contract (Anchor 0.32.1)
-├── create_market - Create new market
-├── place_bet - Bet YES or NO
-├── claim_winnings - Claim proportional payout ← Changed!
-└── add_liquidity - Add liquidity to market
+frontend/
+├── src/
+│   ├── app/                    # Next.js app router pages
+│   │   ├── page.tsx           # Home - Browse markets
+│   │   ├── create/            # Create new market
+│   │   ├── market/[id]/       # Market detail page
+│   │   └── portfolio/         # User portfolio
+│   │
+│   ├── components/            # Reusable components
+│   │   ├── Navbar.tsx        # Navigation bar
+│   │   └── WalletProvider.tsx # Wallet connection
+│   │
+│   ├── hooks/                 # Custom React hooks
+│   │   └── useProgram.ts     # Anchor program hook
+│   │
+│   ├── lib/                   # Utilities
+│   │   ├── constants.ts      # SOL amounts, fees, limits
+│   │   └── anchor.ts         # PDA derivation helpers
+│   │
+│   └── idl/                   # Anchor IDL
+│       └── prediction_market.json
+│
+├── public/                    # Static assets
+├── tailwind.config.ts        # Tailwind configuration
+└── package.json              # Dependencies
 ```
 
-## That's It!
+## 🔑 Key Features
 
-Your frontend is now updated to work with the sentiment-based smart contract. The key addition is the market detail page where all the trading happens.
+### 1. Browse Markets
+- View all active prediction markets
+- See real-time odds and total pool size
+- Filter by status (active, ended, resolved)
+
+### 2. Create Markets
+- Set question and description
+- Define 2-10 possible outcomes
+- Choose end date
+- Initial liquidity (minimum 1 SOL)
+- 2% creation fee applied
+
+### 3. Place Bets
+- Bet on any outcome
+- Min: 0.01 SOL, Max: 1 SOL per bet
+- 2% trading fee applied
+- Real-time odds updates
+
+### 4. Portfolio Management
+- **Your Bets Tab**: All markets you've bet on
+  - Active positions
+  - Claimable winnings
+  - Resolved markets
+  
+- **Markets You Created Tab**: Markets you created
+  - Trading statistics
+  - Fee earnings (50% of trading fees)
+  - One-click fee withdrawal
+
+### 5. Auto-Resolution
+Markets automatically resolve when:
+- Time expires AND
+- Anyone interacts (bet/claim/withdraw)
+- Winner = outcome with most SOL
+
+### 6. Claiming Winnings
+- Winners claim proportional share of pool
+- Losers get nothing
+- One-click claim after resolution
+
+### 7. Creator Fee Distribution
+- Creators earn 50% of all trading fees
+- Protocol earns 50% of all trading fees
+- Both paid in single transaction
+- No manual protocol withdrawal needed
+
+## 🔌 Core Hooks & Functions
+
+### `useProgram()`
+Returns the Anchor program instance:
+```typescript
+const program = useProgram();
+```
+
+### `getPositionPda(market, user)`
+Derives user position PDA:
+```typescript
+const { positionPda } = getPositionPda(marketPubkey, userPubkey);
+```
+
+### `getTreasuryPda()`
+Derives treasury PDA:
+```typescript
+const { treasuryPda } = getTreasuryPda();
+```
+
+## 💰 Fee Structure
+
+All amounts in SOL:
+
+- **Market Creation**: 2% fee (minimum 1 SOL deposit)
+- **Trading**: 2% fee per bet
+- **Fee Split**: 50% creator, 50% protocol
+- **Bet Limits**: 0.01 SOL min, 1 SOL max
+
+## 🎨 Styling
+
+Uses Tailwind CSS with custom gradient:
+
+```css
+/* Primary gradient used throughout */
+.bg-gradient-main {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+```
+
+## 🔐 Security Features
+
+- Wallet-based authentication
+- Transaction confirmation required
+- All SOL transfers on-chain
+- No custody of user funds
+- Transparent on-chain odds calculation
+
+## 📱 Responsive Design
+
+Fully responsive with breakpoints:
+- Mobile: < 768px
+- Tablet: 768px - 1024px
+- Desktop: > 1024px
+
+## 🧪 Testing Checklist
+
+### Market Creation
+- [ ] Can create market with valid inputs
+- [ ] Validation works (min SOL, max sides, etc.)
+- [ ] Creator position initialized correctly
+- [ ] Market appears on homepage
+
+### Trading
+- [ ] Can place bet within limits
+- [ ] Can't bet after market ends
+- [ ] Position updates correctly
+- [ ] Odds update in real-time
+
+### Portfolio
+- [ ] Shows all user positions
+- [ ] Stats calculate correctly
+- [ ] Can claim winnings
+- [ ] Creator fees display properly
+
+### Auto-Resolution
+- [ ] Market resolves after end time
+- [ ] Winner determined correctly
+- [ ] Can trigger resolution by interacting
+
+### Fee Distribution
+- [ ] Creator gets 50% when claiming
+- [ ] Protocol gets 50% automatically
+- [ ] Can't claim twice
+- [ ] Fees display in portfolio
+
+## 🚨 Common Issues
+
+### "Program not initialized"
+Solution: Deploy and initialize treasury in backend first
+
+### "Insufficient SOL"
+Solution: Request devnet SOL from faucet or add more
+
+### "Transaction simulation failed"
+Solution: Check RPC endpoint, try again, or switch RPC
+
+### "Market not resolved"
+Solution: Wait for auto-resolution trigger (interact with market)
+
+### Markets not loading
+Solution: Check NEXT_PUBLIC_PROGRAM_ID matches deployed program
+
+## 🔄 Environment Variables
+
+Required:
+```env
+NEXT_PUBLIC_RPC_ENDPOINT=https://api.devnet.solana.com
+NEXT_PUBLIC_PROGRAM_ID=C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT
+```
+
+Optional (for production):
+```env
+NEXT_PUBLIC_RPC_ENDPOINT=https://api.mainnet-beta.solana.com
+NEXT_PUBLIC_NETWORK=mainnet-beta
+```
+
+## 🎯 Smart Contract Integration
+
+The frontend interacts with 4 main instructions:
+
+1. **create_market**: Create new prediction market
+2. **place_bet**: Bet on an outcome
+3. **claim_winnings**: Claim winnings after resolution
+4. **claim_creator_fees**: Creator withdraws fees (auto-pays protocol)
+
+## 📊 Market States
+
+- **Active**: Betting open, before end_timestamp
+- **Ended**: Past end time, awaiting resolution
+- **Resolved**: Winner determined, can claim
+
+## 🌐 Deployment
+
+### Vercel (Recommended)
+```bash
+vercel deploy
+```
+
+Add environment variables in Vercel dashboard.
+
+### Build for Production
+```bash
+npm run build
+npm start
+```
+
+## 🤝 Contributing
+
+To add new features:
+1. Add instruction to smart contract
+2. Update IDL in `src/idl/`
+3. Create UI component
+4. Test on devnet
+5. Deploy to mainnet
+
+## 📝 IDL Updates
+
+After changing smart contract:
+```bash
+# In backend
+anchor build
+
+# Copy IDL to frontend
+cp target/idl/prediction_market.json ../frontend/src/idl/
+```
+
+## 🔧 Development Tips
+
+- Use devnet for testing (free SOL)
+- Check browser console for transaction logs
+- Monitor Solana Explorer for on-chain data
+- Test with multiple wallets
+- Clear browser cache if seeing stale data
+
+## 📈 Future Enhancements
+
+Potential features:
+- Market categories/tags
+- Search and filtering
+- Historical data charts
+- Social features (comments, sharing)
+- Mobile app
+- Push notifications
+- Multi-wallet support
+- Limit orders
+
+## 🐛 Debug Mode
+
+Enable verbose logging:
+```typescript
+// In useProgram hook
+console.log('Program:', program);
+console.log('Accounts:', accounts);
+```
+
+## 📞 Support
+
+Issues? Check:
+1. RPC endpoint status
+2. Wallet connection
+3. Program deployment
+4. Browser console errors
+5. Solana Explorer for failed transactions
+
+---
+
+Built with ❤️ on Solana
