@@ -1,4 +1,4 @@
-# Prediction Market Smart Contract
+# Sentiment Market Smart Contract
 
 A Solana smart contract (program) for decentralized prediction markets built with Anchor framework.
 
