@@ -857,6 +857,55 @@ export default function MarketDetailPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Bar Graph Visualization */}
+                        <div className="bg-dark-card rounded-lg shadow-lg p-6 border border-dark-border">
+                            <h3 className="text-xl font-bold mb-4 text-white">Distribution</h3>
+                            <div className="space-y-3">
+                                {market.sideNames.map((name, idx) => {
+                                    const side = market.sides[idx];
+                                    const percentage = market.sidePrices[idx];
+                                    const isLeading = idx === leadingSideIndex;
+                                    const isWinner = market.resolved && idx === market.winningSideIndex;
+                                    
+                                    return (
+                                        <div key={idx}>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-semibold text-white">{name}</span>
+                                                    {isWinner && <span className="text-xs">🏆</span>}
+                                                    {isLeading && !market.resolved && (
+                                                        <span className="text-xs bg-white text-black px-1.5 py-0.5 rounded">Leading</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-sm font-bold text-white">{percentage.toFixed(1)}%</span>
+                                            </div>
+                                            <div className="relative h-8 bg-dark-bg rounded-lg overflow-hidden border border-dark-border">
+                                                <div
+                                                    className={`h-full transition-all duration-500 ${
+                                                        isWinner
+                                                            ? 'bg-white'
+                                                            : isLeading
+                                                                ? 'bg-white/80'
+                                                                : 'bg-white/40'
+                                                    }`}
+                                                    style={{ width: `${percentage}%` }}
+                                                >
+                                                    <div className="flex items-center justify-between h-full px-3 text-xs">
+                                                        <span className={`font-medium ${percentage > 30 ? 'text-black' : 'text-transparent'}`}>
+                                                            {(side.totalAmount.toNumber() / LAMPORTS_PER_SOL).toFixed(2)} SOL
+                                                        </span>
+                                                        <span className={`${percentage > 20 ? 'text-black/70' : 'text-transparent'}`}>
+                                                            {side.numBettors} {side.numBettors === 1 ? 'trader' : 'traders'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>
