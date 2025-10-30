@@ -5,10 +5,12 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
 import { getMarketPda, getPositionPda, getTreasuryPda } from '@/lib/anchor';
 import { SystemProgram } from '@solana/web3.js';
+import { useAnchorWallet } from '@solana/wallet-adapter-react';
+
 import BN from 'bn.js';
-import { 
-  MIN_MARKET_CREATION_SOL, 
-  CREATION_FEE_PERCENT, 
+import {
+  MIN_MARKET_CREATION_SOL,
+  CREATION_FEE_PERCENT,
   MIN_SIDES,
   MAX_SIDES,
   MAX_SIDE_NAME_LENGTH,
@@ -17,7 +19,7 @@ import {
 import Navbar from '@/components/Navbar';
 
 export default function CreatePage() {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const program = useProgram();
 
@@ -36,10 +38,10 @@ export default function CreatePage() {
   const minDate = tomorrow.toISOString().split('T')[0];
 
   useEffect(() => {
-    console.log('Wallet state:', { 
-      publicKey: publicKey?.toString(), 
-      connected, 
-      hasProgram: !!program 
+    console.log('Wallet state:', {
+      publicKey: publicKey?.toString(),
+      connected,
+      hasProgram: !!program
     });
   }, [publicKey, connected, program]);
 
@@ -153,7 +155,7 @@ export default function CreatePage() {
 
       // Get fresh blockhash
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      
+
       console.log('Got fresh blockhash:', blockhash);
       console.log('Sending transaction...');
 
@@ -162,9 +164,9 @@ export default function CreatePage() {
         .createMarket(
           question,
           description,
-          endTimestamp,
-          validSideNames,
-          amountLamports
+          endTimestamp,     // BN
+          validSideNames,   // string[]
+          amountLamports    // BN (use Math.round * LAMPORTS_PER_SOL to avoid float drift)
         )
         .accounts({
           market: marketPda,
@@ -173,16 +175,23 @@ export default function CreatePage() {
           creator: publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .rpc({
-          skipPreflight: true,
-          commitment: 'confirmed',
-          maxRetries: 3,
-        });
+        .transaction();
+
+      // (B) Fill required fields
+      txSig.feePayer = publicKey!;
+      txSig.recentBlockhash = (await connection.getLatestBlockhash('confirmed')).blockhash;
+
+      // (C) Send with wallet adapter (put options here instead of .rpc())
+      const sig = await sendTransaction(txSig, connection, {
+        skipPreflight: true,
+        preflightCommitment: 'confirmed',
+        maxRetries: 3,
+      });
 
       console.log('✅ Transaction confirmed:', txSig);
 
-      setSuccess(`Market created successfully! Transaction: ${txSig.slice(0, 8)}...`);
-      
+      setSuccess(`Market created successfully! Transaction: ${sig.slice(0, 8)}...`);
+
       // Clear form
       setQuestion('');
       setDescription('');
@@ -199,7 +208,7 @@ export default function CreatePage() {
 
     } catch (err: any) {
       console.error('❌ Error creating market:', err);
-      
+
       // Extract detailed error info
       if (err.logs) {
         console.error('Transaction logs:', err.logs);
@@ -207,10 +216,10 @@ export default function CreatePage() {
       if (err.transactionLogs) {
         console.error('Transaction logs:', err.transactionLogs);
       }
-      
+
       // User-friendly error messages
       let errorMessage = 'Failed to create market';
-      
+
       if (err.message) {
         if (err.message.includes('insufficient')) {
           errorMessage = 'Insufficient SOL balance. You need at least ' + (parseFloat(initialAmount) + 0.05) + ' SOL.';
@@ -222,7 +231,7 @@ export default function CreatePage() {
           errorMessage = err.message;
         }
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -235,7 +244,7 @@ export default function CreatePage() {
   return (
     <div className="min-h-screen bg-dark-bg">
       <Navbar />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-dark-text mb-4">
@@ -433,14 +442,14 @@ export default function CreatePage() {
               <div className="flex">
                 <div className="flex items-start gap-1">
                   <svg className="h-3 w-3 shrink-0 mt-[1px] text-blue-500" viewBox="0 0 50 50" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
                 </div>
-                  <p className="m-0 text-xs leading-tight text-blue-700">
-                    <strong>Winner Takes All:</strong> This market automatically resolves when it ends. 
-                    The side with the most SOL wins, and winners split the entire pool proportionally. 
-                    Fees are distributed 50/50 between you and the protocol.
-                  </p>
+                <p className="m-0 text-xs leading-tight text-blue-700">
+                  <strong>Winner Takes All:</strong> This market automatically resolves when it ends.
+                  The side with the most SOL wins, and winners split the entire pool proportionally.
+                  Fees are distributed 50/50 between you and the protocol.
+                </p>
               </div>
             </div>
 

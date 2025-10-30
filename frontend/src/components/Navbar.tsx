@@ -1,14 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import dynamic from 'next/dynamic';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+// ❌ remove this: import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useConnection } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
 import { IDL } from '@/lib/idl';
 import { LAMPORTS_PER_SOL } from '@/lib/constants';
+
+// ✅ dynamic client-only import prevents SSR markup
+const WalletMultiButton = dynamic(
+  async () =>
+    (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
+  { ssr: false }
+);
 
 interface SearchPreviewMarket {
   publicKey: string;

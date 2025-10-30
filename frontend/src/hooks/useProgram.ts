@@ -1,52 +1,37 @@
 'use client';
 
 import { useMemo } from 'react';
+import type { Idl, Wallet } from '@coral-xyz/anchor';
 import { AnchorProvider, Program } from '@coral-xyz/anchor';
 import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react';
-import { IDL } from '@/lib/idl';
-import { PROGRAM_ID } from '@/lib/constants';
+import { Keypair } from '@solana/web3.js';
+import { IDL } from '@/lib/idl';                    // your generated IDL object
+import { PROGRAM_ID } from '@/lib/constants';       // string like 'C3LR...' or PublicKey
 
 export function useProgram() {
   const { connection } = useConnection();
   const wallet = useAnchorWallet();
 
   return useMemo(() => {
-    console.log('=== useProgram Called ===');
-    console.log('1. Wallet exists?', !!wallet);
-    console.log('2. Wallet publicKey?', wallet?.publicKey?.toString());
-    console.log('3. Connection?', !!connection);
-    
-    if (!wallet) {
-      console.log('❌ No wallet - returning null');
-      return null;
+    // Require a real wallet for txs. (You can add a read-only path if you want.)
+    if (!wallet?.publicKey) return null;
+
+    // Build Provider
+    const provider = new AnchorProvider(connection, wallet as Wallet, {
+      commitment: 'confirmed',
+    });
+
+    // Your Program ctor expects (idl, provider). It reads programId from idl.address.
+    // Ensure the IDL has `.address` set to your program id.
+    const idlAny = IDL as any;
+    if (!idlAny.address) {
+      idlAny.address = typeof PROGRAM_ID === 'string' ? PROGRAM_ID : PROGRAM_ID.toBase58();
     }
 
-    if (!wallet.publicKey) {
-      console.log('❌ Wallet has no publicKey - returning null');
-      return null;
-    }
+    // Cast once to satisfy TS (your IDL is readonly; Anchor's Idl expects mutable arrays)
+    const idl = idlAny as unknown as Idl;
 
-    try {
-      console.log('4. Creating AnchorProvider...');
-      const provider = new AnchorProvider(
-        connection,
-        wallet,
-        { commitment: 'confirmed' }
-      );
-      console.log('✅ Provider created');
-
-      console.log('5. Creating Program with IDL...');
-      console.log('   Program ID:', PROGRAM_ID.toString());
-      
-      // @ts-ignore - IDL typing is complex, using any for now
-      const program = new Program(IDL, provider);
-      console.log('✅ Program created successfully!');
-      console.log('   Program ID from object:', program.programId.toString());
-
-      return program;
-    } catch (error) {
-      console.error('❌ Error creating program:', error);
-      return null;
-    }
+    // ✅ Correct for your version: two-arg constructor (idl, provider)
+    return new Program(idl, provider);
   }, [connection, wallet]);
 }
