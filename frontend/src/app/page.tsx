@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
+import { useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import MarketCard from '@/components/MarketCard';
 import { MarketWithPrices } from '@/types/market';
@@ -12,10 +13,33 @@ import Image from 'next/image';
 
 export default function Home() {
   const [markets, setMarkets] = useState<MarketWithPrices[]>([]);
+  const [filteredMarkets, setFilteredMarkets] = useState<MarketWithPrices[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { connection } = useConnection();
   const program = useProgram();
+  const searchParams = useSearchParams();
+  const searchQuery = searchParams.get('search') || '';
+
+  useEffect(() => {
+    // Load markets even without wallet connected
+    loadMarkets();
+  }, [connection]);
+
+  useEffect(() => {
+    // Filter markets based on search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const filtered = markets.filter(market => 
+        market.question.toLowerCase().includes(query) ||
+        market.description.toLowerCase().includes(query) ||
+        market.sideNames.some(name => name.toLowerCase().includes(query))
+      );
+      setFilteredMarkets(filtered);
+    } else {
+      setFilteredMarkets(markets);
+    }
+  }, [searchQuery, markets]);
 
   useEffect(() => {
     // Load markets even without wallet connected
@@ -212,15 +236,39 @@ export default function Home() {
 
         {/* Markets Grid */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-dark-text mb-6">Active Markets</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-dark-text">
+              {searchQuery ? `Search Results for "${searchQuery}"` : 'Active Markets'}
+            </h2>
+            {searchQuery && (
+              <a 
+                href="/" 
+                className="text-sm text-dark-muted hover:text-white transition"
+              >
+                Clear Search
+              </a>
+            )}
+          </div>
           
           {loading ? (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
               <p className="mt-4 text-dark-muted">Loading markets...</p>
               <p className="mt-2 text-sm text-dark-muted">This may take a few seconds</p>
             </div>
-          ) : markets.length === 0 ? (
+          ) : filteredMarkets.length === 0 && searchQuery ? (
+            <div className="text-center py-12 bg-dark-card rounded-lg shadow border border-dark-border">
+              <div className="text-6xl mb-4">🔍</div>
+              <h3 className="text-xl font-semibold text-dark-text mb-2">No Markets Found</h3>
+              <p className="text-dark-muted mb-6">No markets match your search query "{searchQuery}"</p>
+              <a
+                href="/"
+                className="inline-block bg-white text-black px-6 py-2 rounded-lg font-semibold hover:bg-gray-200 transition"
+              >
+                View All Markets
+              </a>
+            </div>
+          ) : filteredMarkets.length === 0 ? (
             <div className="text-center py-12 bg-dark-card rounded-lg shadow border border-dark-border">
               <div className="text-6xl mb-4">📊</div>
               <h3 className="text-xl font-semibold text-dark-text mb-2">No Active Markets</h3>
@@ -233,11 +281,18 @@ export default function Home() {
               </a>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {markets.map((market) => (
-                <MarketCard key={market.publicKey.toString()} market={market} />
-              ))}
-            </div>
+            <>
+              {searchQuery && (
+                <p className="text-dark-muted mb-4">
+                  Found {filteredMarkets.length} market{filteredMarkets.length !== 1 ? 's' : ''}
+                </p>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredMarkets.map((market) => (
+                  <MarketCard key={market.publicKey.toString()} market={market} />
+                ))}
+              </div>
+            </>
           )}
         </div>
 
