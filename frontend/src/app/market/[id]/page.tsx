@@ -706,9 +706,8 @@ export default function MarketDetailPage() {
                     <div className="space-y-6">
                         {/* Creator Fee Claiming */}
                         {isCreator && (
-                            <div className="bg-white text-black rounded-lg shadow-lg p-6 border border-dark-border">
+                            <div className="bg-dark-card text-white rounded-lg shadow-lg p-6 border border-dark-border">
                                 <h3 className="text-xl font-bold mb-4 flex items-center">
-                                    <span className="mr-2">💰</span>
                                     Creator Fees
                                 </h3>
                                 <div className="space-y-3 mb-4">
@@ -742,7 +741,7 @@ export default function MarketDetailPage() {
                                             {txLoading ? 'Claiming...' : `Claim ${(creatorFeesAvailable / LAMPORTS_PER_SOL).toFixed(4)} SOL`}
                                         </button>
                                         <p className="text-xs opacity-75 text-center">
-                                            💡 Protocol automatically receives their 50% when you claim
+                                            Protocol automatically receives their 50% when you claim
                                         </p>
                                     </>
                                 ) : market.creatorFeesDistributed.toNumber() > 0 ? (
