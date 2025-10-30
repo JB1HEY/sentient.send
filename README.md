@@ -1,6 +1,6 @@
-# Sentient Send - Prediction Market Platform
+# Sentient Send - Sentiment Market Platform
 
-A full-stack decentralized prediction market platform on Solana with a Next.js frontend.
+A full-stack decentralized sentiment market platform on Solana with a Next.js frontend.
 
 ## 📋 Table of Contents
 - [Overview](#-overview)
@@ -21,12 +21,12 @@ A full-stack decentralized prediction market platform on Solana with a Next.js f
 
 ## 🎯 Overview
 
-**Sentient Send** is a complete prediction market platform consisting of:
+**Sentient Send** is a complete sentiment market platform consisting of:
 - **Smart Contract**: Solana program built with Anchor framework
 - **Frontend**: Next.js 14 application with TypeScript and Tailwind CSS
 - **Features**:
   - Permissionless market creation
-  - Multi-outcome prediction markets (2-10 outcomes)
+  - Multi-outcome sentiment markets (2-10 outcomes)
   - Parimutuel betting system (winners split the pool)
   - Automated market resolution
   - Fair fee distribution (50% creator, 50% protocol)
@@ -147,7 +147,7 @@ npm run dev
 The frontend will be available at `http://localhost:3000`
 
 **Frontend Features:**
-- Browse active prediction markets
+- Browse active sentiment markets
 - Create new markets with custom outcomes
 - Place bets on market outcomes
 - View your portfolio and positions
@@ -263,7 +263,7 @@ pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()>
 ---
 
 ### 2. create_market
-Create a new prediction market.
+Create a new sentiment market.
 
 **Parameters:**
 - `question: String` - Market question (max 200 chars)
