@@ -233,23 +233,23 @@ export default function CreatePage() {
   const totalCost = parseFloat(initialAmount);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-dark-bg">
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl font-bold text-dark-text mb-4">
             Send it
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-lg text-dark-muted max-w-2xl mx-auto">
             Create a market where the side with the most SOL wins everything.
             10 options allowed. Winner takes all.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <h2 className="text-3xl font-bold mb-6 bg-gradient-main bg-clip-text text-transparent">
+          <div className="bg-dark-card rounded-lg shadow-lg p-8 border border-dark-border">
+            <h2 className="text-3xl font-bold mb-6 text-white">
               Create Your Market
             </h2>
 
@@ -271,7 +271,7 @@ export default function CreatePage() {
 
             {/* Question */}
             <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-dark-text mb-2">
                 Question *
               </label>
               <input
@@ -279,38 +279,38 @@ export default function CreatePage() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="Who will win the 2024 election?"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
+                className="w-full px-4 py-3 bg-dark-bg border-2 border-dark-border rounded-lg focus:border-white focus:outline-none transition text-dark-text placeholder-dark-muted"
                 maxLength={200}
                 required
                 disabled={loading}
               />
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-dark-muted mt-1">
                 {question.length}/200 characters
               </div>
             </div>
 
             {/* Description */}
             <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-dark-text mb-2">
                 Description (optional)
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Market resolves automatically when it ends. The side with the most SOL wins."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition resize-none"
+                className="w-full px-4 py-3 bg-dark-bg border-2 border-dark-border rounded-lg focus:border-white focus:outline-none transition resize-none text-dark-text placeholder-dark-muted"
                 rows={4}
                 maxLength={500}
                 disabled={loading}
               />
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-dark-muted mt-1">
                 {description.length}/500 characters
               </div>
             </div>
 
             {/* Side Names */}
             <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-dark-text mb-2">
                 Options ({sideNames.length}/{MAX_SIDES}) *
               </label>
               <div className="space-y-2">
@@ -321,7 +321,7 @@ export default function CreatePage() {
                       value={name}
                       onChange={(e) => updateSideName(index, e.target.value)}
                       placeholder={`Option ${index + 1} (e.g., "Donald Trump")`}
-                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
+                      className="flex-1 px-4 py-3 bg-dark-bg border-2 border-dark-border rounded-lg focus:border-white focus:outline-none transition text-dark-text placeholder-dark-muted"
                       maxLength={MAX_SIDE_NAME_LENGTH}
                       required
                       disabled={loading}
@@ -330,7 +330,7 @@ export default function CreatePage() {
                       <button
                         type="button"
                         onClick={() => removeSide(index)}
-                        className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                        className="px-4 py-2 bg-red-900/20 text-red-400 rounded-lg hover:bg-red-900/30 transition"
                         disabled={loading}
                       >
                         Remove
@@ -343,13 +343,13 @@ export default function CreatePage() {
                 <button
                   type="button"
                   onClick={addSide}
-                  className="mt-2 px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition text-sm font-semibold"
+                  className="mt-2 px-4 py-2 bg-blue-900/20 text-blue-400 rounded-lg hover:bg-blue-900/30 transition text-sm font-semibold"
                   disabled={loading}
                 >
                   + Add Option
                 </button>
               )}
-              <div className="text-xs text-gray-500 mt-2">
+              <div className="text-xs text-dark-muted mt-2">
                 Each option can be up to {MAX_SIDE_NAME_LENGTH} characters. Names must be unique.
               </div>
             </div>
@@ -357,7 +357,7 @@ export default function CreatePage() {
             {/* End Date & Time */}
             <div className="mb-6 grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-dark-text mb-2">
                   End Date *
                 </label>
                 <input
@@ -365,20 +365,20 @@ export default function CreatePage() {
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   min={minDate}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
+                  className="w-full px-4 py-3 bg-dark-bg border-2 border-dark-border rounded-lg focus:border-white focus:outline-none transition text-dark-text"
                   required
                   disabled={loading}
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-dark-text mb-2">
                   End Time *
                 </label>
                 <input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
+                  className="w-full px-4 py-3 bg-dark-bg border-2 border-dark-border rounded-lg focus:border-white focus:outline-none transition text-dark-text"
                   required
                   disabled={loading}
                 />
@@ -387,7 +387,7 @@ export default function CreatePage() {
 
             {/* Initial Amount */}
             <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-dark-text mb-2">
                 Initial Amount (SOL) *
               </label>
               <input
@@ -396,34 +396,34 @@ export default function CreatePage() {
                 onChange={(e) => setInitialAmount(e.target.value)}
                 min={MIN_MARKET_CREATION_SOL}
                 step="0.1"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
+                className="w-full px-4 py-3 bg-dark-bg border-2 border-dark-border rounded-lg focus:border-white focus:outline-none transition text-dark-text"
                 required
                 disabled={loading}
               />
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-dark-muted mt-1">
                 Minimum {MIN_MARKET_CREATION_SOL} SOL. This will be added to the total pool.
               </div>
             </div>
 
             {/* Cost Breakdown */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <h3 className="font-semibold text-gray-900 mb-3">Cost Breakdown </h3>
+            <div className="bg-dark-bg rounded-lg p-4 mb-6 border border-dark-border">
+              <h3 className="font-semibold text-dark-text mb-3">Cost Breakdown </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Initial Amount </span>
-                  <span className="font-medium">{initialAmount} SOL</span>
+                  <span className="text-dark-muted">Initial Amount </span>
+                  <span className="font-medium text-dark-text">{initialAmount} SOL</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Creation Fee (2%) </span>
-                  <span className="font-medium">{creationFee.toFixed(2)} SOL</span>
+                  <span className="text-dark-muted">Creation Fee (2%) </span>
+                  <span className="font-medium text-dark-text">{creationFee.toFixed(2)} SOL</span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-500">
+                <div className="flex justify-between text-xs text-dark-muted">
                   <span>Goes to Pool </span>
                   <span>{(parseFloat(initialAmount) - creationFee).toFixed(2)} SOL</span>
                 </div>
-                <div className="border-t pt-2 flex justify-between">
-                  <span className="font-semibold text-gray-900">Total Cost </span>
-                  <span className="font-bold text-primary">{totalCost} SOL </span>
+                <div className="border-t border-dark-border pt-2 flex justify-between">
+                  <span className="font-semibold text-dark-text">Total Cost </span>
+                  <span className="font-bold text-white">{totalCost} SOL </span>
                 </div>
               </div>
             </div>
@@ -480,7 +480,7 @@ export default function CreatePage() {
             <button
               type="submit"
               disabled={loading || !publicKey || !program}
-              className="w-full bg-gradient-main text-white py-4 rounded-lg font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-white text-black py-4 rounded-lg font-bold text-lg hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center">

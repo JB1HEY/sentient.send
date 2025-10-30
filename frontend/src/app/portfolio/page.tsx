@@ -280,20 +280,20 @@ export default function PortfolioPage() {
   const claimableCreatorFees = createdMarkets.filter(m => m.resolved && m.availableCreatorFees > 0).length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-dark-bg">
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Your Portfolio</h1>
-            <p className="text-lg text-gray-600">Track your positions and earnings</p>
+            <h1 className="text-4xl font-bold text-white mb-2">Your Portfolio</h1>
+            <p className="text-lg text-dark-muted">Track your positions and earnings</p>
           </div>
           {publicKey && (
             <button
               onClick={loadPortfolio}
               disabled={loading}
-              className="bg-white text-primary border-2 border-primary px-6 py-2 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50"
+              className="bg-dark-card text-white border-2 border-white px-6 py-2 rounded-lg font-semibold hover:bg-dark-border transition disabled:opacity-50"
             >
               {loading ? 'Loading...' : 'Refresh'}
             </button>
@@ -301,33 +301,33 @@ export default function PortfolioPage() {
         </div>
 
         {!publicKey ? (
-          <div className="text-center py-16 bg-white rounded-lg shadow">
+          <div className="text-center py-16 bg-dark-card rounded-lg shadow border border-dark-border">
             <div className="text-6xl mb-4">👛</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl font-bold text-white mb-4">
               Connect Your Wallet
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-dark-muted mb-6">
               Connect your wallet to view your portfolio
             </p>
             <WalletMultiButton />
           </div>
         ) : loading ? (
-          <div className="text-center py-16 bg-white rounded-lg shadow">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <p className="text-gray-600">Loading your positions...</p>
+          <div className="text-center py-16 bg-dark-card rounded-lg shadow border border-dark-border">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
+            <p className="text-dark-muted">Loading your positions...</p>
           </div>
         ) : (
           <div className="space-y-6">
             {/* Tab Navigation */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="border-b border-gray-200">
+            <div className="bg-dark-card rounded-lg shadow border border-dark-border">
+              <div className="border-b border-dark-border">
                 <nav className="flex -mb-px">
                   <button
                     onClick={() => setActiveTab('positions')}
                     className={`px-6 py-4 font-semibold border-b-2 transition ${
                       activeTab === 'positions'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'border-white text-white'
+                        : 'border-transparent text-dark-muted hover:text-white hover:border-dark-border'
                     }`}
                   >
                     Your Sentiments ({positions.length})
@@ -336,8 +336,8 @@ export default function PortfolioPage() {
                     onClick={() => setActiveTab('created')}
                     className={`px-6 py-4 font-semibold border-b-2 transition ${
                       activeTab === 'created'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'border-white text-white'
+                        : 'border-transparent text-dark-muted hover:text-white hover:border-dark-border'
                     }`}
                   >
                     Markets You Created ({createdMarkets.length})
@@ -347,7 +347,7 @@ export default function PortfolioPage() {
 
               {/* Error Message */}
               {error && (
-                <div className="m-6 bg-red-50 border-l-4 border-red-500 p-4">
+                <div className="m-6 bg-red-900/20 border-l-4 border-red-500 p-4">
                   <div className="flex">
                     <div className="flex-shrink-0">
                       <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
@@ -355,7 +355,7 @@ export default function PortfolioPage() {
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm text-red-700">{error}</p>
+                      <p className="text-sm text-red-400">{error}</p>
                     </div>
                   </div>
                 </div>
@@ -365,26 +365,26 @@ export default function PortfolioPage() {
               {activeTab === 'positions' && (
                 <>
                   {/* Stats Overview */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-6 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-6 border-b border-dark-border">
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Total Invested</div>
-                      <div className="text-2xl font-bold text-gray-900">
+                      <div className="text-sm text-dark-muted mb-1">Total Invested</div>
+                      <div className="text-2xl font-bold text-white">
                         {totalInvested.toFixed(4)} SOL
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Potential Payout</div>
-                      <div className="text-2xl font-bold text-green-600">
+                      <div className="text-sm text-dark-muted mb-1">Potential Payout</div>
+                      <div className="text-2xl font-bold text-white">
                         {totalPotentialPayout.toFixed(4)} SOL
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Active Positions</div>
-                      <div className="text-2xl font-bold text-gray-900">{activePositions}</div>
+                      <div className="text-sm text-dark-muted mb-1">Active Positions</div>
+                      <div className="text-2xl font-bold text-white">{activePositions}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Claimable</div>
-                      <div className="text-2xl font-bold text-primary">{claimablePositions}</div>
+                      <div className="text-sm text-dark-muted mb-1">Claimable</div>
+                      <div className="text-2xl font-bold text-white">{claimablePositions}</div>
                     </div>
                   </div>
 
@@ -392,49 +392,49 @@ export default function PortfolioPage() {
                   {positions.length === 0 ? (
                     <div className="p-12 text-center">
                       <div className="text-6xl mb-4">📊</div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      <h3 className="text-xl font-semibold text-white mb-2">
                         No Positions Yet
                       </h3>
-                      <p className="text-gray-600 mb-6">
+                      <p className="text-dark-muted mb-6">
                         Start trading on prediction markets to see your positions here
                       </p>
                       <a
                         href="/"
-                        className="inline-block bg-gradient-main text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition"
+                        className="inline-block bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition"
                       >
                         Browse Markets
                       </a>
                     </div>
                   ) : (
-                    <div className="divide-y">
+                    <div className="divide-y divide-dark-border">
                       {positions.map((position, index) => (
-                        <div key={index} className="p-6 hover:bg-gray-50 transition">
+                        <div key={index} className="p-6 hover:bg-dark-bg transition">
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex-1">
                               <Link 
                                 href={`/market/${position.marketAddress}`}
-                                className="text-lg font-bold text-gray-900 hover:text-primary transition"
+                                className="text-lg font-bold text-white hover:text-gray-300 transition"
                               >
                                 {position.marketQuestion}
                               </Link>
                               <div className="flex items-center space-x-3 mt-2 text-sm">
                                 {position.isActive ? (
-                                  <span className="flex items-center text-green-600">
-                                    <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                                  <span className="flex items-center text-white">
+                                    <span className="inline-block w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></span>
                                     Active
                                   </span>
                                 ) : position.marketResolved ? (
-                                  <span className="flex items-center text-gray-600">
+                                  <span className="flex items-center text-dark-muted">
                                     <span className="inline-block w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
                                     Resolved
                                   </span>
                                 ) : (
-                                  <span className="flex items-center text-yellow-600">
-                                    <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-1"></span>
+                                  <span className="flex items-center text-gray-400">
+                                    <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span>
                                     Ended
                                   </span>
                                 )}
-                                <span className="text-gray-500">
+                                <span className="text-dark-muted">
                                   {position.marketEndDate.toLocaleDateString()}
                                 </span>
                               </div>
@@ -444,23 +444,23 @@ export default function PortfolioPage() {
                             {position.marketResolved && !position.claimed && position.estimatedPayout > 0 ? (
                               <Link
                                 href={`/market/${position.marketAddress}`}
-                                className="bg-gradient-main text-white px-4 py-2 rounded-lg font-semibold hover:opacity-90 transition text-sm"
+                                className="bg-white text-black px-4 py-2 rounded-lg font-semibold hover:bg-gray-200 transition text-sm"
                               >
                                 Claim {position.estimatedPayout.toFixed(4)} SOL
                               </Link>
                             ) : position.claimed ? (
-                              <span className="bg-green-50 text-green-700 px-4 py-2 rounded-lg font-semibold text-sm">
+                              <span className="bg-white/10 text-white px-4 py-2 rounded-lg font-semibold text-sm">
                                 ✓ Claimed
                               </span>
                             ) : position.isActive ? (
                               <Link
                                 href={`/market/${position.marketAddress}`}
-                                className="bg-white text-primary border-2 border-primary px-4 py-2 rounded-lg font-semibold hover:bg-gray-50 transition text-sm"
+                                className="bg-dark-bg text-white border-2 border-white px-4 py-2 rounded-lg font-semibold hover:bg-dark-border transition text-sm"
                               >
                                 View Market
                               </Link>
                             ) : (
-                              <span className="bg-gray-50 text-gray-600 px-4 py-2 rounded-lg text-sm">
+                              <span className="bg-dark-bg text-dark-muted px-4 py-2 rounded-lg text-sm border border-dark-border">
                                 No Winnings
                               </span>
                             )}
@@ -475,21 +475,21 @@ export default function PortfolioPage() {
                                   key={betIndex}
                                   className={`p-3 rounded-lg border-2 ${
                                     isWinningSide
-                                      ? 'border-green-500 bg-green-50'
-                                      : 'border-gray-200 bg-gray-50'
+                                      ? 'border-white bg-white/10'
+                                      : 'border-dark-border bg-dark-bg'
                                   }`}
                                 >
                                   <div className="flex justify-between items-center">
                                     <div>
-                                      <div className="font-semibold text-sm text-gray-900">
+                                      <div className="font-semibold text-sm text-white">
                                         {bet.sideName}
                                       </div>
-                                      <div className="text-xs text-gray-600">
+                                      <div className="text-xs text-dark-muted">
                                         {bet.amount.toFixed(4)} SOL
                                       </div>
                                     </div>
                                     {isWinningSide && (
-                                      <span className="text-green-600 text-xl">🏆</span>
+                                      <span className="text-white text-xl">🏆</span>
                                     )}
                                   </div>
                                 </div>
@@ -498,23 +498,23 @@ export default function PortfolioPage() {
                           </div>
 
                           {/* Stats */}
-                          <div className="flex justify-between items-center text-sm pt-3 border-t">
+                          <div className="flex justify-between items-center text-sm pt-3 border-t border-dark-border">
                             <div className="flex space-x-4">
-                              <span className="text-gray-600">
-                                Total Invested: <span className="font-semibold text-gray-900">
+                              <span className="text-dark-muted">
+                                Total Invested: <span className="font-semibold text-white">
                                   {position.totalInvested.toFixed(4)} SOL
                                 </span>
                               </span>
                               {position.marketResolved && position.estimatedPayout > 0 && (
-                                <span className="text-gray-600">
-                                  Payout: <span className="font-semibold text-green-600">
+                                <span className="text-dark-muted">
+                                  Payout: <span className="font-semibold text-white">
                                     {position.estimatedPayout.toFixed(4)} SOL
                                   </span>
                                 </span>
                               )}
                             </div>
                             {position.marketResolved && (
-                              <span className="text-gray-500 text-xs">
+                              <span className="text-dark-muted text-xs">
                                 Winner: {position.sides[position.winningSideIndex]?.name}
                               </span>
                             )}
@@ -530,26 +530,26 @@ export default function PortfolioPage() {
               {activeTab === 'created' && (
                 <>
                   {/* Creator Stats */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-6 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-6 border-b border-dark-border">
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Markets Created</div>
-                      <div className="text-2xl font-bold text-gray-900">
+                      <div className="text-sm text-dark-muted mb-1">Markets Created</div>
+                      <div className="text-2xl font-bold text-white">
                         {createdMarkets.length}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Available Fees</div>
-                      <div className="text-2xl font-bold text-green-600">
+                      <div className="text-sm text-dark-muted mb-1">Available Fees</div>
+                      <div className="text-2xl font-bold text-white">
                         {totalCreatorFees.toFixed(4)} SOL
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Active Markets</div>
-                      <div className="text-2xl font-bold text-gray-900">{activeCreatedMarkets}</div>
+                      <div className="text-sm text-dark-muted mb-1">Active Markets</div>
+                      <div className="text-2xl font-bold text-white">{activeCreatedMarkets}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">Fees to Claim</div>
-                      <div className="text-2xl font-bold text-primary">{claimableCreatorFees}</div>
+                      <div className="text-sm text-dark-muted mb-1">Fees to Claim</div>
+                      <div className="text-2xl font-bold text-white">{claimableCreatorFees}</div>
                     </div>
                   </div>
 
@@ -557,52 +557,52 @@ export default function PortfolioPage() {
                   {createdMarkets.length === 0 ? (
                     <div className="p-12 text-center">
                       <div className="text-6xl mb-4">🎯</div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      <h3 className="text-xl font-semibold text-white mb-2">
                         No Markets Created
                       </h3>
-                      <p className="text-gray-600 mb-6">
+                      <p className="text-dark-muted mb-6">
                         Create your first prediction market and earn fees from trading
                       </p>
                       <a
                         href="/create"
-                        className="inline-block bg-gradient-main text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition"
+                        className="inline-block bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition"
                       >
                         Create Market
                       </a>
                     </div>
                   ) : (
-                    <div className="divide-y">
+                    <div className="divide-y divide-dark-border">
                       {createdMarkets.map((market, index) => (
-                        <div key={index} className="p-6 hover:bg-gray-50 transition">
+                        <div key={index} className="p-6 hover:bg-dark-bg transition">
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex-1">
                               <Link 
                                 href={`/market/${market.marketAddress}`}
-                                className="text-lg font-bold text-gray-900 hover:text-primary transition"
+                                className="text-lg font-bold text-white hover:text-gray-300 transition"
                               >
                                 {market.question}
                               </Link>
                               <div className="flex items-center space-x-3 mt-2 text-sm">
                                 {market.isActive ? (
-                                  <span className="flex items-center text-green-600">
-                                    <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                                  <span className="flex items-center text-white">
+                                    <span className="inline-block w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></span>
                                     Active
                                   </span>
                                 ) : market.resolved ? (
-                                  <span className="flex items-center text-gray-600">
+                                  <span className="flex items-center text-dark-muted">
                                     <span className="inline-block w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
                                     Resolved
                                   </span>
                                 ) : (
-                                  <span className="flex items-center text-yellow-600">
-                                    <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-1"></span>
+                                  <span className="flex items-center text-gray-400">
+                                    <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span>
                                     Ended
                                   </span>
                                 )}
-                                <span className="text-gray-500">
+                                <span className="text-dark-muted">
                                   {market.endDate.toLocaleDateString()}
                                 </span>
-                                <span className="text-gray-500">
+                                <span className="text-dark-muted">
                                   {market.numBettors} traders
                                 </span>
                               </div>
@@ -613,7 +613,7 @@ export default function PortfolioPage() {
                               <button
                                 onClick={() => handleClaimCreatorFees(market.marketAddress)}
                                 disabled={txLoading === market.marketAddress}
-                                className="bg-gradient-main text-white px-4 py-2 rounded-lg font-semibold hover:opacity-90 transition text-sm disabled:opacity-50"
+                                className="bg-white text-black px-4 py-2 rounded-lg font-semibold hover:bg-gray-200 transition text-sm disabled:opacity-50"
                               >
                                 {txLoading === market.marketAddress
                                   ? 'Claiming...'

@@ -8,6 +8,7 @@ import { MarketWithPrices } from '@/types/market';
 import { LAMPORTS_PER_SOL } from '@/lib/constants';
 import { useProgram } from '@/hooks/useProgram';
 import { IDL } from '@/lib/idl';
+import Image from 'next/image';
 
 export default function Home() {
   const [markets, setMarkets] = useState<MarketWithPrices[]>([]);
@@ -163,29 +164,27 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-dark-bg">
       <Navbar />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero Section */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold bg-gradient-main bg-clip-text text-transparent mb-4">
-            Sentient
-          </h1>
-          <p className="text-xl text-gray-600 mb-8">
+        <div className="text-center mb-12 flex flex-col items-center">
+          <Image src="/transparent.png" alt="sentient.send" width={200} height={200} />
+          <p className="text-xl text-dark-muted mb-8">
             Create markets with 2-10 options. Winner takes all. Powered by native SOL on Solana.
           </p>
           <div className="flex justify-center space-x-4">
             <a
               href="/create"
-              className="bg-gradient-main text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition"
+              className="bg-white text-black px-8 py-3 rounded-lg font-semibold hover:bg-gray-200 transition"
             >
               Create Market
             </a>
             <button
               onClick={loadMarkets}
               disabled={loading}
-              className="bg-white text-primary border-2 border-primary px-8 py-3 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50"
+              className="bg-dark-card text-white border-2 border-white px-8 py-3 rounded-lg font-semibold hover:bg-dark-border transition disabled:opacity-50"
             >
               {loading ? 'Loading...' : 'Refresh Markets'}
             </button>
@@ -196,7 +195,7 @@ export default function Home() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-4">
+          <div className="mb-8 bg-red-900/20 border-l-4 border-red-500 p-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
@@ -204,8 +203,8 @@ export default function Home() {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-                <p className="text-xs text-red-600 mt-1">Check the browser console for more details</p>
+                <p className="text-sm text-red-400">{error}</p>
+                <p className="text-xs text-red-500 mt-1">Check the browser console for more details</p>
               </div>
             </div>
           </div>
@@ -213,22 +212,22 @@ export default function Home() {
 
         {/* Markets Grid */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Active Markets</h2>
+          <h2 className="text-2xl font-bold text-dark-text mb-6">Active Markets</h2>
           
           {loading ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-              <p className="mt-4 text-gray-600">Loading markets...</p>
-              <p className="mt-2 text-sm text-gray-500">This may take a few seconds</p>
+              <p className="mt-4 text-dark-muted">Loading markets...</p>
+              <p className="mt-2 text-sm text-dark-muted">This may take a few seconds</p>
             </div>
           ) : markets.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg shadow">
+            <div className="text-center py-12 bg-dark-card rounded-lg shadow border border-dark-border">
               <div className="text-6xl mb-4">📊</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Active Markets</h3>
-              <p className="text-gray-600 mb-6">Be the first to create a prediction market!</p>
+              <h3 className="text-xl font-semibold text-dark-text mb-2">No Active Markets</h3>
+              <p className="text-dark-muted mb-6">Be the first to create a prediction market!</p>
               <a
                 href="/create"
-                className="inline-block bg-gradient-main text-white px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition"
+                className="inline-block bg-white text-black px-6 py-2 rounded-lg font-semibold hover:bg-gray-200 transition"
               >
                 Create First Market
               </a>
@@ -244,21 +243,21 @@ export default function Home() {
 
         {/* Stats Section */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-3xl font-bold text-primary mb-2">{markets.length}</div>
-            <div className="text-gray-600">Active Markets</div>
+          <div className="bg-dark-card p-6 rounded-lg shadow border border-dark-border">
+            <div className="text-3xl font-bold text-white mb-2">{markets.length}</div>
+            <div className="text-dark-muted">Active Markets</div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-3xl font-bold text-primary mb-2">
+          <div className="bg-dark-card p-6 rounded-lg shadow border border-dark-border">
+            <div className="text-3xl font-bold text-white mb-2">
               {markets.reduce((acc, m) => acc + (m.volume || 0), 0).toFixed(2)}
             </div>
-            <div className="text-gray-600">Total Volume (SOL)</div>
+            <div className="text-dark-muted">Total Volume (SOL)</div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="text-3xl font-bold text-primary mb-2">
+          <div className="bg-dark-card p-6 rounded-lg shadow border border-dark-border">
+            <div className="text-3xl font-bold text-white mb-2">
               {markets.reduce((acc, m) => acc + (m.numBettors || 0), 0)}
             </div>
-            <div className="text-gray-600">Total Traders</div>
+            <div className="text-dark-muted">Total Traders</div>
           </div>
         </div>
       </main>

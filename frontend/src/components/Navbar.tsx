@@ -10,7 +10,7 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <nav className="bg-white shadow-md border-b border-gray-200">
+    <nav className="bg-dark-card shadow-md border-b border-dark-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
@@ -18,9 +18,9 @@ export default function Navbar() {
             href="/" 
             className="flex items-center space-x-2 hover:opacity-80 transition"
           >
-            <div className="text-2xl">🎯</div>
-            <span className="text-xl font-bold bg-gradient-main bg-clip-text text-transparent">
-              FuSwap
+            <img src="/transparent.png" alt="sentient.send" className="h-8 w-8" />
+            <span className="text-xl font-bold text-white">
+              sentient.send
             </span>
           </Link>
 
@@ -29,10 +29,10 @@ export default function Navbar() {
             {/* Hamburger Menu Button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 rounded-lg hover:bg-gray-100 transition"
+              className="p-2 rounded-lg hover:bg-dark-bg transition"
             >
               <svg 
-                className="w-6 h-6 text-gray-700" 
+                className="w-6 h-6 text-dark-text" 
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
@@ -56,33 +56,33 @@ export default function Navbar() {
             </button>
 
             {/* Wallet Button */}
-            <WalletMultiButton className="!bg-gradient-main !rounded-lg !font-semibold !px-4 !py-2 hover:!opacity-90 !transition" />
+            <WalletMultiButton className="!bg-white !text-black !rounded-lg !font-semibold !px-4 !py-2 hover:!bg-gray-200 !transition" />
           </div>
         </div>
 
         {/* Dropdown Menu */}
         {isMenuOpen && (
-          <div className="absolute right-4 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+          <div className="absolute right-4 mt-2 w-56 bg-dark-card rounded-lg shadow-lg border border-dark-border z-50">
             <div className="py-2">
               <Link
                 href="/"
                 onClick={() => setIsMenuOpen(false)}
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition font-medium"
+                className="block px-4 py-3 text-dark-text hover:bg-dark-bg hover:text-white transition font-medium"
               >
-                📊 Markets
+                Markets
               </Link>
               <Link
                 href="/create"
                 onClick={() => setIsMenuOpen(false)}
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition font-medium border-t border-gray-100"
+                className="block px-4 py-3 text-dark-text hover:bg-dark-bg hover:text-white transition font-medium border-t border-dark-border"
               >
-                ✨ Create Market
+                Create Market
               </Link>
               {publicKey && (
                 <Link
                   href="/portfolio"
                   onClick={() => setIsMenuOpen(false)}
-                  className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition font-medium border-t border-gray-100"
+                  className="block px-4 py-3 text-dark-text hover:bg-dark-bg hover:text-white transition font-medium border-t border-dark-border"
                 >
                   💼 Portfolio
                 </Link>

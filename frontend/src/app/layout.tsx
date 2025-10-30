@@ -42,7 +42,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <title>FuSwap - Prediction Markets</title>
+        <title>sentient.send - Prediction Markets</title>
       </head>
       <body suppressHydrationWarning>
         <WalletContextProvider>

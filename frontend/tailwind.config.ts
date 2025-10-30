@@ -8,12 +8,22 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Roboto', 'sans-serif'],
+      },
       colors: {
-        primary: '#667eea',
-        secondary: '#764ba2',
+        primary: '#ffffff',
+        secondary: '#cccccc',
+        dark: {
+          bg: '#000000',
+          card: '#1a1a1a',
+          border: '#333333',
+          text: '#ffffff',
+          muted: '#999999',
+        },
       },
       backgroundImage: {
-        'gradient-main': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        'gradient-main': 'linear-gradient(135deg, #ffffff 0%, #cccccc 100%)',
       },
     },
   },
