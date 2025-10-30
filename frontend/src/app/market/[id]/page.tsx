@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useProgram } from '@/hooks/useProgram';
 import { getPositionPda, getTreasuryPda } from '@/lib/anchor';
 import { PublicKey } from '@solana/web3.js';
@@ -16,11 +16,13 @@ import {
 import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import { MarketWithPrices, UserPosition } from '@/types/market';
+import { IDL } from '@/lib/idl';
 
 export default function MarketDetailPage() {
     const params = useParams();
     const marketId = params?.id as string;
     const { publicKey } = useWallet();
+    const { connection } = useConnection();
     const program = useProgram();
 
     const [market, setMarket] = useState<MarketWithPrices | null>(null);
@@ -34,24 +36,47 @@ export default function MarketDetailPage() {
     const [isCreator, setIsCreator] = useState(false);
 
     useEffect(() => {
-        if (marketId && program) {
+        if (marketId) {
             loadMarket();
         }
-    }, [marketId, publicKey, program]);
+    }, [marketId, publicKey, connection]);
 
     async function loadMarket() {
         try {
             setLoading(true);
-            if (!program) {
-                setError('Program not initialized');
-                return;
+            
+            // Create a program instance (with or without wallet)
+            let programToUse = program;
+            
+            if (!programToUse) {
+                console.log('⚠️ No wallet connected, creating read-only program instance');
+                const { AnchorProvider, Program } = await import('@coral-xyz/anchor');
+                const { Keypair } = await import('@solana/web3.js');
+                
+                // Create a dummy wallet for read-only access
+                const dummyWallet = {
+                    publicKey: Keypair.generate().publicKey,
+                    signTransaction: async () => { throw new Error('Read-only'); },
+                    signAllTransactions: async () => { throw new Error('Read-only'); },
+                };
+                
+                const provider = new AnchorProvider(
+                    connection,
+                    dummyWallet as any,
+                    { commitment: 'confirmed' }
+                );
+                
+                // @ts-ignore
+                programToUse = new Program(IDL, provider);
+                console.log('✅ Read-only program created');
             }
 
             const marketPubkey = new PublicKey(marketId);
             console.log('Loading market:', marketPubkey.toString());
 
             // Fetch market using Anchor
-            const marketAccount = await program.account.market.fetch(marketPubkey);
+            // @ts-ignore
+            const marketAccount = await programToUse.account.market.fetch(marketPubkey);
 
             if (!marketAccount) {
                 setError('Market not found');
@@ -118,10 +143,11 @@ export default function MarketDetailPage() {
             setMarket(marketWithPrice);
 
             // Load user position if wallet connected
-            if (publicKey && program) {
+            if (publicKey && programToUse) {
                 try {
                     const { positionPda } = getPositionPda(marketPubkey, publicKey);
-                    const positionData = await program.account.userPosition.fetch(positionPda);
+                    // @ts-ignore
+                    const positionData = await programToUse.account.userPosition.fetch(positionPda);
                     setPosition(positionData as any);
                 } catch (err) {
                     // Position doesn't exist yet - that's ok
