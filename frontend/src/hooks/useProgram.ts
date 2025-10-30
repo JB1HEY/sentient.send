@@ -38,7 +38,8 @@ export function useProgram() {
       console.log('5. Creating Program with IDL...');
       console.log('   Program ID:', PROGRAM_ID.toString());
       
-      const program = new Program(IDL as any, provider);
+      // @ts-ignore - IDL typing is complex, using any for now
+      const program = new Program(IDL, provider);
       console.log('✅ Program created successfully!');
       console.log('   Program ID from object:', program.programId.toString());
 

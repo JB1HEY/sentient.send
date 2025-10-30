@@ -7,34 +7,57 @@ import MarketCard from '@/components/MarketCard';
 import { MarketWithPrices } from '@/types/market';
 import { LAMPORTS_PER_SOL } from '@/lib/constants';
 import { useProgram } from '@/hooks/useProgram';
+import { IDL } from '@/lib/idl';
 
 export default function Home() {
   const [markets, setMarkets] = useState<MarketWithPrices[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { connection } = useConnection();
   const program = useProgram();
 
   useEffect(() => {
-    if (program) {
-      loadMarkets();
-    }
-  }, [program]);
+    // Load markets even without wallet connected
+    loadMarkets();
+  }, [connection]);
 
   async function loadMarkets() {
     try {
       setLoading(true);
       setError('');
       
-      if (!program) {
-        console.log('❌ Program not initialized yet');
-        return;
+      // Create a temporary program instance if wallet not connected
+      let programToUse = program;
+      
+      if (!programToUse) {
+        console.log('⚠️ No wallet connected, creating read-only program instance');
+        const { AnchorProvider, Program } = await import('@coral-xyz/anchor');
+        const { Keypair } = await import('@solana/web3.js');
+        
+        // Create a dummy wallet for read-only access
+        const dummyWallet = {
+          publicKey: Keypair.generate().publicKey,
+          signTransaction: async () => { throw new Error('Read-only'); },
+          signAllTransactions: async () => { throw new Error('Read-only'); },
+        };
+        
+        const provider = new AnchorProvider(
+          connection,
+          dummyWallet as any,
+          { commitment: 'confirmed' }
+        );
+        
+        // @ts-ignore
+        programToUse = new Program(IDL, provider);
+        console.log('✅ Read-only program created');
       }
 
-      console.log('🔍 Fetching markets from program:', program.programId.toString());
+      console.log('🔍 Fetching markets from program:', programToUse.programId.toString());
       
       // Use Anchor's built-in account fetcher instead of manual parsing
       // This is much more reliable and handles all the complexity
-      const marketAccounts = await program.account.market.all();
+      // @ts-ignore - TypeScript doesn't know about the market account type
+      const marketAccounts = await programToUse.account.market.all();
       
       console.log('✅ Found', marketAccounts.length, 'total market accounts');
 
@@ -161,19 +184,14 @@ export default function Home() {
             </a>
             <button
               onClick={loadMarkets}
-              disabled={loading || !program}
+              disabled={loading}
               className="bg-white text-primary border-2 border-primary px-8 py-3 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50"
             >
               {loading ? 'Loading...' : 'Refresh Markets'}
             </button>
           </div>
           
-          {/* Debug Info */}
-          {!program && (
-            <div className="mt-4 text-sm text-yellow-600">
-              ⚠️ Program not initialized. Please make sure your wallet is connected.
-            </div>
-          )}
+          {/* Debug Info - removed as markets now load without wallet */}
         </div>
 
         {/* Error Message */}
