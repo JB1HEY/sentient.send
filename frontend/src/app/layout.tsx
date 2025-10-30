@@ -26,13 +26,10 @@ function WalletContextProvider({ children }: { children: ReactNode }) {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
-    return <div>{children}</div>;
-  }
-
+  // Always wrap children in providers, but don't autoConnect until mounted
   return (
     <ConnectionProvider endpoint={RPC_ENDPOINT}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect={mounted}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>
