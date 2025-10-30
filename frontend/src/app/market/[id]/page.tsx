@@ -402,12 +402,12 @@ export default function MarketDetailPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50">
+            <div className="min-h-screen bg-dark-bg">
                 <Navbar />
                 <div className="flex items-center justify-center h-screen">
                     <div className="text-center">
-                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                        <p className="mt-4 text-gray-600">Loading market...</p>
+                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+                        <p className="mt-4 text-dark-muted">Loading market...</p>
                     </div>
                 </div>
             </div>
@@ -416,13 +416,13 @@ export default function MarketDetailPage() {
 
     if (!market) {
         return (
-            <div className="min-h-screen bg-gray-50">
+            <div className="min-h-screen bg-dark-bg">
                 <Navbar />
                 <div className="max-w-7xl mx-auto px-4 py-12">
                     <div className="text-center">
-                        <h1 className="text-2xl font-bold text-gray-900 mb-4">Market Not Found</h1>
-                        <p className="text-gray-600 mb-4">This market doesn't exist or failed to load.</p>
-                        <a href="/" className="text-primary hover:underline">← Back to Markets</a>
+                        <h1 className="text-2xl font-bold text-white mb-4">Market Not Found</h1>
+                        <p className="text-dark-muted mb-4">This market doesn't exist or failed to load.</p>
+                        <a href="/" className="text-white hover:underline">← Back to Markets</a>
                     </div>
                 </div>
             </div>
@@ -448,24 +448,24 @@ export default function MarketDetailPage() {
     const leadingSideIndex = market.sidePrices.indexOf(Math.max(...market.sidePrices));
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-dark-bg">
             <Navbar />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <a href="/" className="text-primary hover:underline mb-6 inline-block">← Back to Markets</a>
+                <a href="/" className="text-white hover:underline mb-6 inline-block">← Back to Markets</a>
 
                 {/* Creator Badge */}
                 {isCreator && (
-                    <div className="bg-gradient-main text-white rounded-lg shadow-lg p-4 mb-6">
+                    <div className="bg-white text-black rounded-lg shadow-lg p-4 mb-6">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center">
                                 <span className="text-2xl mr-3">🎯</span>
                                 <div>
                                     <h3 className="font-bold text-lg">You Created This Market</h3>
-                                    <p className="text-sm opacity-90">You earn 50% of all trading fees</p>
+                                    <p className="text-sm opacity-75">You earn 50% of all trading fees</p>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="text-sm opacity-90">Total Fees</div>
+                                <div className="text-sm opacity-75">Total Fees</div>
                                 <div className="text-2xl font-bold">
                                     {(market.feePool.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                 </div>
@@ -476,47 +476,47 @@ export default function MarketDetailPage() {
 
                 {/* Error/Success Messages */}
                 {error && (
-                    <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-                        <p className="text-sm text-red-700">{error}</p>
+                    <div className="bg-red-900/20 border-l-4 border-red-500 p-4 mb-6">
+                        <p className="text-sm text-red-400">{error}</p>
                     </div>
                 )}
                 {success && (
-                    <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-                        <p className="text-sm text-green-700">{success}</p>
+                    <div className="bg-white/10 border-l-4 border-white p-4 mb-6">
+                        <p className="text-sm text-white">{success}</p>
                     </div>
                 )}
 
                 {/* Market Header */}
-                <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
+                <div className="bg-dark-card rounded-lg shadow-lg p-8 mb-6 border border-dark-border">
                     <div className="flex justify-between items-start mb-6">
                         <div className="flex-1">
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">{market.question}</h1>
+                            <h1 className="text-3xl font-bold text-white mb-2">{market.question}</h1>
                             {market.description && (
-                                <p className="text-gray-600 mb-4">{market.description}</p>
+                                <p className="text-dark-muted mb-4">{market.description}</p>
                             )}
                             <div className="flex items-center space-x-4">
                                 {market.isActive ? (
                                     <div className="flex items-center text-sm">
-                                        <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-                                        <span className="text-gray-600">
+                                        <span className="inline-block w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></span>
+                                        <span className="text-dark-muted">
                                             Active • {daysLeft > 0 && `${daysLeft}d `}{hoursLeft}h {minutesLeft}m left
                                         </span>
                                     </div>
                                 ) : market.resolved ? (
                                     <div className="flex items-center text-sm">
-                                        <span className="inline-block w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
-                                        <span className="text-gray-600">
+                                        <span className="inline-block w-2 h-2 bg-dark-muted rounded-full mr-2"></span>
+                                        <span className="text-dark-muted">
                                             Resolved - Winner: {market.sideNames[market.winningSideIndex]}
                                         </span>
                                     </div>
                                 ) : (
                                     <div className="flex items-center text-sm">
-                                        <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                                        <span className="text-gray-600">Market Ended (Awaiting Resolution)</span>
+                                        <span className="inline-block w-2 h-2 bg-dark-muted rounded-full mr-2"></span>
+                                        <span className="text-dark-muted">Market Ended (Awaiting Resolution)</span>
                                     </div>
                                 )}
-                                <span className="text-sm text-gray-500">{market.numBettors} traders</span>
-                                <span className="text-sm text-gray-500">{market.volume.toFixed(2)} SOL volume</span>
+                                <span className="text-sm text-dark-muted">{market.numBettors} traders</span>
+                                <span className="text-sm text-dark-muted">{market.volume.toFixed(2)} SOL volume</span>
                             </div>
                         </div>
                     </div>
@@ -531,28 +531,28 @@ export default function MarketDetailPage() {
                                 <div
                                     key={idx}
                                     className={`p-4 rounded-lg border-2 ${isWinner
-                                        ? 'border-green-500 bg-green-50'
+                                        ? 'border-white bg-white/10'
                                         : isLeading
-                                            ? 'border-blue-500 bg-blue-50'
-                                            : 'border-gray-200 bg-white'
+                                            ? 'border-white bg-white/5'
+                                            : 'border-dark-border bg-dark-bg'
                                         }`}
                                 >
                                     <div className="flex justify-between items-start mb-2">
-                                        <div className="font-semibold text-gray-900">{name}</div>
+                                        <div className="font-semibold text-white">{name}</div>
                                         {isLeading && !market.resolved && (
-                                            <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded">Leading</span>
+                                            <span className="text-xs bg-white text-black px-2 py-1 rounded">Leading</span>
                                         )}
                                         {isWinner && (
-                                            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded">Winner 🏆</span>
+                                            <span className="text-xs bg-white text-black px-2 py-1 rounded">Winner 🏆</span>
                                         )}
                                     </div>
-                                    <div className="text-2xl font-bold text-primary mb-1">
+                                    <div className="text-2xl font-bold text-white mb-1">
                                         {market.sidePrices[idx].toFixed(1)}%
                                     </div>
-                                    <div className="text-sm text-gray-600">
+                                    <div className="text-sm text-dark-muted">
                                         {(side.totalAmount.toNumber() / LAMPORTS_PER_SOL).toFixed(2)} SOL
                                     </div>
-                                    <div className="text-xs text-gray-500 mt-1">
+                                    <div className="text-xs text-dark-muted mt-1">
                                         {side.numBettors} traders
                                     </div>
                                 </div>
@@ -561,14 +561,9 @@ export default function MarketDetailPage() {
                     </div>
 
                     {/* Info Box */}
-                    <div className="bg-purple-50 border-l-4 border-purple-500 p-4">
-                        {/* ⬇️ was: className="flex" */}
+                    <div className="bg-white/5 border-l-4 border-white p-4">
                         <div className="flex items-start gap-1.5">
-                            {/* ⬇️ drop the outer wrapper and ml-3 on the text */}
-                            <svg className="h-4 w-4 text-purple-500 mt-[2px]" viewBox="0 0 50 50" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                            <p className="text-sm text-purple-700 leading-tight">
+                            <p className="text-sm text-white leading-tight">
                                 <strong>Winner Takes All:</strong> When this market ends, the side with the most SOL wins.
                                 Winners split the entire {market.totalLiquidity.toFixed(2)} SOL pool proportionally. Losers get nothing.
                             </p>
@@ -578,14 +573,14 @@ export default function MarketDetailPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left: Betting Interface or Claiming */}
                     <div className="lg:col-span-2">
-                        <div className="bg-white rounded-lg shadow-lg p-6">
+                        <div className="bg-dark-card rounded-lg shadow-lg p-6 border border-dark-border">
                             {market.isActive ? (
                                 <>
-                                    <h2 className="text-2xl font-bold mb-6">Place Your Bet</h2>
+                                    <h2 className="text-2xl font-bold mb-6 text-white">Place Your Bet</h2>
 
                                     {/* Select Side */}
                                     <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-3">
+                                        <label className="block text-sm font-semibold text-white mb-3">
                                             Select Option
                                         </label>
                                         <div className="grid grid-cols-1 gap-2">
@@ -594,19 +589,19 @@ export default function MarketDetailPage() {
                                                     key={idx}
                                                     onClick={() => setSelectedSide(idx)}
                                                     className={`p-4 rounded-lg border-2 transition text-left ${selectedSide === idx
-                                                        ? 'border-primary bg-purple-50'
-                                                        : 'border-gray-200 hover:border-primary'
+                                                        ? 'border-white bg-white/10'
+                                                        : 'border-dark-border hover:border-white'
                                                         }`}
                                                 >
                                                     <div className="flex justify-between items-center">
                                                         <div>
-                                                            <div className="font-bold text-gray-900">{name}</div>
-                                                            <div className="text-sm text-gray-600">
+                                                            <div className="font-bold text-white">{name}</div>
+                                                            <div className="text-sm text-dark-muted">
                                                                 {market.sidePrices[idx].toFixed(1)}% of pool
                                                             </div>
                                                         </div>
                                                         {idx === leadingSideIndex && (
-                                                            <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded">
+                                                            <span className="text-xs bg-white text-black px-2 py-1 rounded">
                                                                 Leading
                                                             </span>
                                                         )}
@@ -618,7 +613,7 @@ export default function MarketDetailPage() {
 
                                     {/* Bet Amount */}
                                     <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                        <label className="block text-sm font-semibold text-white mb-2">
                                             Bet Amount (SOL)
                                         </label>
                                         <input
@@ -628,14 +623,14 @@ export default function MarketDetailPage() {
                                             min={MIN_BET_SOL}
                                             max={MAX_BET_SOL}
                                             step="0.01"
-                                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-primary focus:outline-none transition"
+                                            className="w-full px-4 py-3 border-2 border-dark-border bg-dark-bg text-white rounded-lg focus:border-white focus:outline-none transition"
                                             placeholder="0.1"
                                         />
-                                        <div className="flex justify-between mt-2 text-sm text-gray-600">
+                                        <div className="flex justify-between mt-2 text-sm text-dark-muted">
                                             <span>Min: {MIN_BET_SOL} SOL</span>
                                             <span>Max: {MAX_BET_SOL} SOL</span>
                                         </div>
-                                        <div className="text-xs text-gray-500 mt-1">
+                                        <div className="text-xs text-dark-muted mt-1">
                                             2% fee: {((parseFloat(betAmount) || 0) * (BET_FEE_BPS / 10000)).toFixed(4)} SOL
                                         </div>
                                     </div>
@@ -646,7 +641,7 @@ export default function MarketDetailPage() {
                                             <button
                                                 key={amount}
                                                 onClick={() => setBetAmount(amount)}
-                                                className="px-4 py-2 border-2 border-gray-200 rounded-lg hover:border-primary transition text-sm font-medium"
+                                                className="px-4 py-2 border-2 border-dark-border rounded-lg hover:border-white transition text-sm font-medium text-white"
                                             >
                                                 {amount}
                                             </button>
@@ -657,7 +652,7 @@ export default function MarketDetailPage() {
                                     <button
                                         onClick={handlePlaceBet}
                                         disabled={txLoading || !publicKey}
-                                        className="w-full bg-gradient-main text-white py-4 rounded-lg font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="w-full bg-white text-black py-4 rounded-lg font-bold text-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {txLoading ? (
                                             <span className="flex items-center justify-center">
@@ -677,28 +672,28 @@ export default function MarketDetailPage() {
                             ) : (
                                 <div className="text-center py-8">
                                     <div className="text-4xl mb-4">⏰</div>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-2">Trading Closed</h3>
-                                    <p className="text-gray-600 mb-4">
+                                    <h3 className="text-xl font-bold text-white mb-2">Trading Closed</h3>
+                                    <p className="text-dark-muted mb-4">
                                         {market.resolved
                                             ? `Winner: ${market.sideNames[market.winningSideIndex]}`
                                             : 'Market has ended but not yet resolved'}
                                     </p>
                                     {!market.resolved && publicKey && (
                                         <>
-                                            <p className="text-sm text-gray-500 mb-4">
+                                            <p className="text-sm text-dark-muted mb-4">
                                                 Click below to resolve this market and determine the winner
                                             </p>
                                             <button
                                                 onClick={handleResolveMarket}
                                                 disabled={txLoading}
-                                                className="bg-gradient-main text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
+                                                className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
                                             >
                                                 {txLoading ? 'Resolving...' : 'Resolve Market'}
                                             </button>
                                         </>
                                     )}
                                     {!market.resolved && !publicKey && (
-                                        <p className="text-sm text-gray-500">
+                                        <p className="text-sm text-dark-muted">
                                             Connect wallet to resolve this market
                                         </p>
                                     )}
@@ -711,26 +706,26 @@ export default function MarketDetailPage() {
                     <div className="space-y-6">
                         {/* Creator Fee Claiming */}
                         {isCreator && (
-                            <div className="bg-gradient-main text-white rounded-lg shadow-lg p-6">
+                            <div className="bg-white text-black rounded-lg shadow-lg p-6 border border-dark-border">
                                 <h3 className="text-xl font-bold mb-4 flex items-center">
                                     <span className="mr-2">💰</span>
                                     Creator Fees
                                 </h3>
                                 <div className="space-y-3 mb-4">
                                     <div className="flex justify-between items-center">
-                                        <span className="opacity-90">Total Fee Pool</span>
+                                        <span className="opacity-75">Total Fee Pool</span>
                                         <span className="font-semibold">
                                             {(market.feePool.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center">
-                                        <span className="opacity-90">Your Share (50%)</span>
+                                        <span className="opacity-75">Your Share (50%)</span>
                                         <span className="font-bold text-2xl">
                                             {(creatorFeesAvailable / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="opacity-90">Protocol Share (50%)</span>
+                                        <span className="opacity-75">Protocol Share (50%)</span>
                                         <span>
                                             {(creatorFeesAvailable / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                         </span>
@@ -742,24 +737,24 @@ export default function MarketDetailPage() {
                                         <button
                                             onClick={handleClaimCreatorFees}
                                             disabled={txLoading}
-                                            className="w-full bg-white text-primary py-3 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50 mb-3"
+                                            className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-dark-card transition disabled:opacity-50 mb-3"
                                         >
                                             {txLoading ? 'Claiming...' : `Claim ${(creatorFeesAvailable / LAMPORTS_PER_SOL).toFixed(4)} SOL`}
                                         </button>
-                                        <p className="text-xs opacity-90 text-center">
+                                        <p className="text-xs opacity-75 text-center">
                                             💡 Protocol automatically receives their 50% when you claim
                                         </p>
                                     </>
                                 ) : market.creatorFeesDistributed.toNumber() > 0 ? (
-                                    <div className="bg-white bg-opacity-20 rounded-lg p-3 text-center">
+                                    <div className="bg-black bg-opacity-10 rounded-lg p-3 text-center">
                                         <span className="font-semibold">✓ Fees Claimed</span>
                                     </div>
                                 ) : market.resolved ? (
-                                    <div className="bg-white bg-opacity-20 rounded-lg p-3 text-center">
+                                    <div className="bg-black bg-opacity-10 rounded-lg p-3 text-center">
                                         <span>No fees to claim</span>
                                     </div>
                                 ) : (
-                                    <div className="bg-white bg-opacity-20 rounded-lg p-3 text-center">
+                                    <div className="bg-black bg-opacity-10 rounded-lg p-3 text-center">
                                         <span>Available after market resolves</span>
                                     </div>
                                 )}
@@ -768,34 +763,34 @@ export default function MarketDetailPage() {
 
                         {/* User Position */}
                         {position && (
-                            <div className="bg-white rounded-lg shadow-lg p-6">
-                                <h3 className="text-xl font-bold mb-4">Your Position</h3>
+                            <div className="bg-dark-card rounded-lg shadow-lg p-6 border border-dark-border">
+                                <h3 className="text-xl font-bold mb-4 text-white">Your Position</h3>
                                 <div className="space-y-3 mb-4">
                                     {position.bets.map((bet, idx) => {
                                         if (!bet.hasBet || bet.amount.toNumber() === 0) return null;
                                         const isWinningSide = market.resolved && idx === market.winningSideIndex;
                                         return (
                                             <div key={idx} className="flex justify-between items-center">
-                                                <span className="text-gray-600">
+                                                <span className="text-dark-muted">
                                                     {market.sideNames[idx]}
                                                     {isWinningSide && <span className="ml-2">🏆</span>}
                                                 </span>
-                                                <span className="font-semibold">
+                                                <span className="font-semibold text-white">
                                                     {(bet.amount.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                                 </span>
                                             </div>
                                         );
                                     })}
-                                    <div className="border-t pt-3 flex justify-between items-center">
-                                        <span className="text-gray-600">Total Invested</span>
-                                        <span className="font-semibold">
+                                    <div className="border-t border-dark-border pt-3 flex justify-between items-center">
+                                        <span className="text-dark-muted">Total Invested</span>
+                                        <span className="font-semibold text-white">
                                             {(position.totalInvested.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                         </span>
                                     </div>
                                     {market.resolved && estimatedPayout > 0 && (
                                         <div className="flex justify-between items-center">
-                                            <span className="text-gray-600">Your Payout</span>
-                                            <span className="font-bold text-green-600 text-xl">
+                                            <span className="text-dark-muted">Your Payout</span>
+                                            <span className="font-bold text-white text-xl">
                                                 {estimatedPayout.toFixed(4)} SOL
                                             </span>
                                         </div>
@@ -807,72 +802,60 @@ export default function MarketDetailPage() {
                                     <button
                                         onClick={handleClaimWinnings}
                                         disabled={txLoading}
-                                        className="w-full bg-gradient-main text-white py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
+                                        className="w-full bg-white text-black py-3 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
                                     >
                                         {txLoading ? 'Claiming...' : `Claim ${estimatedPayout.toFixed(4)} SOL`}
                                     </button>
                                 )}
 
                                 {position.claimed && (
-                                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                                        <span className="text-green-700 font-semibold">✓ Winnings Claimed</span>
+                                    <div className="bg-white/10 border border-white rounded-lg p-3 text-center">
+                                        <span className="text-white font-semibold">✓ Winnings Claimed</span>
                                     </div>
                                 )}
 
                                 {market.resolved && estimatedPayout === 0 && !position.claimed && (
-                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-                                        <span className="text-gray-700">No winnings (bet on losing side)</span>
+                                    <div className="bg-dark-bg border border-dark-border rounded-lg p-3 text-center">
+                                        <span className="text-dark-muted">No winnings (bet on losing side)</span>
                                     </div>
                                 )}
                             </div>
                         )}
 
                         {/* Market Stats */}
-                        <div className="bg-white rounded-lg shadow-lg p-6">
-                            <h3 className="text-xl font-bold mb-4">Market Stats</h3>
+                        <div className="bg-dark-card rounded-lg shadow-lg p-6 border border-dark-border">
+                            <h3 className="text-xl font-bold mb-4 text-white">Market Stats</h3>
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Total Pool</span>
-                                    <span className="font-semibold">
+                                    <span className="text-dark-muted">Total Pool</span>
+                                    <span className="font-semibold text-white">
                                         {market.totalLiquidity.toFixed(4)} SOL
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Total Volume</span>
-                                    <span className="font-semibold">
+                                    <span className="text-dark-muted">Total Volume</span>
+                                    <span className="font-semibold text-white">
                                         {market.volume.toFixed(4)} SOL
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Fee Pool</span>
-                                    <span className="font-semibold">
+                                    <span className="text-dark-muted">Fee Pool</span>
+                                    <span className="font-semibold text-white">
                                         {(market.feePool.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Total Traders</span>
-                                    <span className="font-semibold">{market.numBettors}</span>
+                                    <span className="text-dark-muted">Total Traders</span>
+                                    <span className="font-semibold text-white">{market.numBettors}</span>
                                 </div>
-                                <div className="border-t pt-3 flex justify-between items-center">
-                                    <span className="text-gray-600">Ends</span>
-                                    <span className="font-semibold text-sm">
+                                <div className="border-t border-dark-border pt-3 flex justify-between items-center">
+                                    <span className="text-dark-muted">Ends</span>
+                                    <span className="font-semibold text-sm text-white">
                                         {market.endDate.toLocaleDateString()}<br />
                                         {market.endDate.toLocaleTimeString()}
                                     </span>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* How It Works */}
-                        <div className="bg-gradient-main text-white rounded-lg shadow-lg p-6">
-                            <h3 className="text-lg font-bold mb-3">🏆 Winner Takes All</h3>
-                            <ul className="space-y-2 text-sm">
-                                <li>• Side with most SOL wins</li>
-                                <li>• Winners split entire pool</li>
-                                <li>• Losers get nothing</li>
-                                <li>• Auto-resolves when market ends</li>
-                                {isCreator && <li>• Creators earn 50% of trading fees</li>}
-                            </ul>
                         </div>
                     </div>
                 </div>

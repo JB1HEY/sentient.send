@@ -260,7 +260,7 @@ export default function Navbar() {
                   onClick={() => setIsMenuOpen(false)}
                   className="block px-4 py-3 text-dark-text hover:bg-dark-bg hover:text-white transition font-medium border-t border-dark-border"
                 >
-                  💼 Portfolio
+                  Portfolio
                 </Link>
               )}
             </div>
