@@ -1,28 +1,59 @@
-# Sentiment Market Smart Contract
+# Sentient Send - Prediction Market Platform
 
-A Solana smart contract (program) for decentralized prediction markets built with Anchor framework.
+A full-stack decentralized prediction market platform on Solana with a Next.js frontend.
+
+## 📋 Table of Contents
+- [Overview](#-overview)
+- [Tech Stack](#️-tech-stack)
+- [Prerequisites](#-prerequisites)
+- [Quick Start](#-quick-start)
+- [Project Structure](#-project-structure)
+- [Architecture](#️-architecture)
+- [Instructions](#-instructions)
+- [Auto-Resolution](#-auto-resolution)
+- [Economics](#-economics)
+- [Security Features](#-security-features)
+- [Testing](#-testing)
+- [Constants](#-constants)
+- [Error Codes](#-error-codes)
+- [Deployment](#-deployment)
+- [Useful Commands](#-useful-commands)
 
 ## 🎯 Overview
 
-This smart contract enables:
-- Permissionless market creation
-- Multi-outcome prediction markets (2-10 outcomes)
-- Parimutuel betting system (winners split the pool)
-- Automated market resolution
-- Fair fee distribution (50% creator, 50% protocol)
+**Sentient Send** is a complete prediction market platform consisting of:
+- **Smart Contract**: Solana program built with Anchor framework
+- **Frontend**: Next.js 14 application with TypeScript and Tailwind CSS
+- **Features**:
+  - Permissionless market creation
+  - Multi-outcome prediction markets (2-10 outcomes)
+  - Parimutuel betting system (winners split the pool)
+  - Automated market resolution
+  - Fair fee distribution (50% creator, 50% protocol)
+  - Real-time market tracking
+  - User portfolio management
 
 ## 🛠️ Tech Stack
 
-- **Framework**: Anchor 0.30.1
+### Smart Contract
+- **Framework**: Anchor 0.32.1
 - **Language**: Rust
 - **Blockchain**: Solana
 - **Cluster**: Devnet (for testing) / Mainnet (production)
+- **Program ID**: `C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT`
+
+### Frontend
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Wallet**: Solana Wallet Adapter
+- **State Management**: React Hooks
 
 ## 📦 Prerequisites
 
 - Rust 1.75+
 - Solana CLI 1.18+
-- Anchor CLI 0.30.1
+- Anchor CLI 0.32.1
 - Node.js 18+ (for testing)
 
 ## 🚀 Quick Start
@@ -38,14 +69,15 @@ sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"
 
 # Install Anchor
 cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-avm install 0.30.1
-avm use 0.30.1
+avm install 0.32.1
+avm use 0.32.1
 ```
 
 ### 2. Clone and Setup
 
 ```bash
-cd prediction-market
+git clone <your-repo-url>
+cd sentient.send
 anchor build
 ```
 
@@ -66,6 +98,12 @@ solana airdrop 2
 
 ### 4. Update Program ID
 
+After deployment, the program ID is already set in the project:
+```
+Program ID: C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT
+```
+
+If you need to deploy your own instance:
 ```bash
 # After first build, get program ID
 anchor keys list
@@ -83,28 +121,68 @@ anchor deploy
 
 ### 6. Initialize Treasury
 
+The treasury must be initialized once before any markets can be created:
+
 ```bash
-anchor run initialize
+# Using npm script
+npm run init-treasury
+
+# Or manually with ts-node
+ts-node init-treasury.ts
+
+# Verify treasury was created
+npm run inspect-treasury
 ```
+
+### 7. Run Frontend (Optional)
+
+To run the Next.js frontend application:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend will be available at `http://localhost:3000`
+
+**Frontend Features:**
+- Browse active prediction markets
+- Create new markets with custom outcomes
+- Place bets on market outcomes
+- View your portfolio and positions
+- Claim winnings from resolved markets
+- Real-time market statistics
 
 ## 📁 Project Structure
 
 ```
-prediction-market/
+sentient.send/
 ├── programs/
 │   └── prediction-market/
-│       └── src/
-│           └── lib.rs              # Main contract code
+│       ├── src/
+│       │   ├── lib.rs              # Main contract code
+│       │   ├── state.rs            # Account structures
+│       │   └── error.rs            # Error definitions
+│       └── Cargo.toml              # Rust dependencies
 │
 ├── tests/
-│   └── prediction-market.ts        # TypeScript tests
+│   └── prediction-market.test.ts   # TypeScript tests
 │
-├── migrations/
-│   └── deploy.ts                   # Deployment script
+├── frontend/                       # Next.js frontend application
+│   ├── src/
+│   │   ├── app/                   # Next.js app directory
+│   │   ├── components/            # React components
+│   │   ├── hooks/                 # Custom hooks
+│   │   ├── lib/                   # Anchor & utilities
+│   │   └── types/                 # TypeScript types
+│   └── package.json
 │
-├── Anchor.toml                     # Anchor config
-├── Cargo.toml                      # Rust dependencies
-└── package.json                    # Node dependencies
+├── init-treasury.ts                # Treasury initialization script
+├── inspect-treasury.ts             # Treasury inspection tool
+├── Anchor.toml                     # Anchor configuration
+├── Cargo.toml                      # Workspace dependencies
+└── package.json                    # Root dependencies
 ```
 
 ## 🏗️ Architecture
@@ -320,6 +398,34 @@ pub fn claim_creator_fees(ctx: Context<ClaimCreatorFees>) -> Result<()>
 
 ---
 
+### 6. resolve_market
+Explicitly resolve a market after end time (optional).
+
+**Accounts:**
+- `market` (mut): Market account
+- `resolver` (signer): Anyone can call this
+
+**What it does:**
+1. Checks if market has ended (current time > end_timestamp)
+2. Finds the outcome with the most SOL
+3. Sets that outcome as the winner
+4. Marks market as resolved
+
+**Note:** This instruction is optional as markets auto-resolve when `claim_winnings` or `claim_creator_fees` are called. However, it's useful for:
+- Explicitly triggering resolution
+- Allowing resolution before anyone claims
+- Frontend displaying resolution status immediately
+
+**Constraints:**
+- Market must not already be resolved
+- Current time must be > end_timestamp
+
+```rust
+pub fn resolve_market(ctx: Context<ResolveMarket>) -> Result<()>
+```
+
+---
+
 ## 🤖 Auto-Resolution
 
 Markets automatically resolve when:
@@ -346,6 +452,9 @@ Triggered by:
 - `place_bet` (will fail but resolve market)
 - `claim_winnings`
 - `claim_creator_fees`
+- `resolve_market` (explicit resolution)
+
+**Anyone can call `resolve_market`** after the end timestamp to explicitly trigger resolution.
 
 ## 💰 Economics
 
@@ -404,25 +513,97 @@ Protocol fees: 0.01 SOL (50% of 0.02)
 # Run all tests
 anchor test
 
-# Test specific file
-anchor test --skip-deploy tests/prediction-market.ts
+# Run with detailed output
+anchor test -- --nocapture
 
-# With logs
-anchor test -- --features "verbose"
+# Test specific file
+anchor test --skip-deploy tests/prediction-market.test.ts
+
+# Test with logs
+RUST_LOG=debug anchor test
 ```
 
 ### Test Coverage
-- ✅ Market creation
-- ✅ Bet placement
-- ✅ Multi-outcome support
-- ✅ Auto-resolution
-- ✅ Winnings calculation
-- ✅ Fee distribution
-- ✅ Edge cases (no bets, ties, etc.)
+The test suite includes:
+- ✅ Treasury initialization
+- ✅ Market creation with validation
+- ✅ Bet placement on multiple outcomes
+- ✅ Multi-outcome market support (2-10 sides)
+- ✅ Automatic market resolution
+- ✅ Winnings calculation and distribution
+- ✅ Fee distribution (creator + protocol)
+- ✅ Edge cases (no bets, ties, invalid inputs)
+- ✅ Error handling (expired markets, invalid bets)
+- ✅ Position tracking and claims
+- ✅ Double-claim prevention
+
+## 👨‍💻 Development Workflow
+
+### Adding New Features
+
+1. **Update Smart Contract**
+   ```bash
+   # Edit programs/prediction-market/src/lib.rs
+   # Add new instruction or modify existing
+   
+   # Build
+   anchor build
+   
+   # Generate new IDL
+   # (automatically generated on build)
+   ```
+
+2. **Add Tests**
+   ```bash
+   # Edit tests/prediction-market.test.ts
+   # Add test cases for new functionality
+   
+   # Run tests
+   anchor test
+   ```
+
+3. **Update Frontend**
+   ```bash
+   cd frontend
+   
+   # Copy new IDL
+   cp ../target/idl/prediction_market.json src/lib/idl.ts
+   
+   # Update types if needed
+   # Edit src/types/*.ts
+   
+   # Update hooks/components
+   # Edit src/hooks/*.ts and src/components/*.tsx
+   ```
+
+4. **Test End-to-End**
+   ```bash
+   # Deploy to devnet
+   anchor deploy --provider.cluster devnet
+   
+   # Run frontend
+   cd frontend && npm run dev
+   
+   # Test with wallet in browser
+   ```
+
+### Contributing Guidelines
+
+To contribute to the project:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass (`anchor test`)
+6. Build successfully (`anchor build`)
+7. Update documentation if needed
+8. Commit your changes (`git commit -m 'Add amazing feature'`)
+9. Push to the branch (`git push origin feature/amazing-feature`)
+10. Open a Pull Request
 
 ## 📊 Constants
 
-Located in `lib.rs`:
+Located in `programs/prediction-market/src/lib.rs`:
 
 ```rust
 pub const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
@@ -466,87 +647,309 @@ pub enum ErrorCode {
 }
 ```
 
-## 🔄 Upgrade Process
+## 🔄 Program Upgrade Process
 
-To upgrade the program:
+To upgrade the program (requires upgrade authority):
 
 ```bash
-# 1. Make changes to lib.rs
+# 1. Make changes to programs/prediction-market/src/lib.rs
 # 2. Update version in Cargo.toml
-# 3. Build
+
+# 3. Build new program
 anchor build
 
-# 4. Deploy upgrade
+# 4. Test thoroughly
+anchor test
+
+# 5. Deploy upgrade to devnet first
+solana config set --url devnet
 anchor upgrade target/deploy/prediction_market.so \
-  --program-id YOUR_PROGRAM_ID \
+  --program-id C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT \
   --provider.cluster devnet
+
+# 6. Test on devnet with frontend
+
+# 7. Deploy to mainnet (if applicable)
+solana config set --url mainnet-beta
+anchor upgrade target/deploy/prediction_market.so \
+  --program-id <YOUR_MAINNET_PROGRAM_ID> \
+  --provider.cluster mainnet-beta
 ```
+
+**Important Notes:**
+- Only the upgrade authority can perform upgrades
+- Always test on devnet first
+- Verify the build is correct before upgrading
+- Consider making programs immutable in production
 
 ## 🌐 Deployment
 
-### Devnet
+### Current Deployment
+The program is currently deployed with the following details:
+- **Program ID**: `C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT`
+- **Network**: Devnet
+- **Status**: Active
+
+### Deploy Your Own Instance
+
+#### Devnet
 ```bash
+# Set cluster
 solana config set --url devnet
+
+# Build program
 anchor build
+
+# Deploy
 anchor deploy
-anchor run initialize
+
+# Initialize treasury
+npm run init-treasury
+
+# Verify deployment
+anchor keys list
+solana program show <YOUR_PROGRAM_ID>
 ```
 
-### Mainnet
+#### Mainnet
 ```bash
+# Set cluster
 solana config set --url mainnet-beta
+
+# Build with verification support
 anchor build --verifiable
+
+# Deploy (ensure you have enough SOL)
 anchor deploy
-anchor run initialize
+
+# Initialize treasury
+npm run init-treasury
 
 # Verify build
-anchor verify YOUR_PROGRAM_ID
+anchor verify <YOUR_PROGRAM_ID>
 ```
 
-## 📈 Monitoring
+### Frontend Deployment
 
-Check program data:
+The frontend can be deployed to Vercel, Netlify, or any platform supporting Next.js:
+
 ```bash
-# Get treasury info
-solana account TREASURY_PDA_ADDRESS
+cd frontend
 
-# Get market info  
-solana account MARKET_PDA_ADDRESS
+# Build for production
+npm run build
 
-# Monitor logs
-solana logs | grep YOUR_PROGRAM_ID
+# Deploy to Vercel (example)
+vercel deploy
+
+# Or set environment variables and deploy
+# NEXT_PUBLIC_SOLANA_NETWORK=devnet
+# NEXT_PUBLIC_PROGRAM_ID=C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT
 ```
 
-## 🐛 Debugging
+## 📈 Monitoring & Inspection
 
-Enable logs in tests:
+### Check Program Status
+```bash
+# Get program info
+solana program show C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT
+
+# Get program data account
+solana account C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT
+```
+
+### Inspect Treasury
+```bash
+# Use built-in script
+npm run inspect-treasury
+
+# Or manually derive PDA and check
+# Treasury PDA seeds: ["treasury"]
+solana account <TREASURY_PDA_ADDRESS>
+```
+
+### Monitor Markets
+```bash
+# Get market info (replace with actual market PDA)
+solana account <MARKET_PDA_ADDRESS>
+
+# Monitor all program logs
+solana logs | grep C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT
+
+# Get recent transactions
+solana transaction-history C3LRoEztvLPioY3ruddYGTT9qxzvqBivHzgmpGJuQ9CT
+```
+
+### Frontend Monitoring
+The frontend provides real-time visibility into:
+- All active markets
+- Market statistics (volume, bettors, pool size)
+- User positions and portfolio
+- Market resolution status
+- Transaction history
+
+## 🐛 Debugging & Troubleshooting
+
+### Enable Detailed Logging
+
+In tests:
 ```typescript
-// In anchor test
+// In tests/prediction-market.test.ts
 before(() => {
+  // Log all transactions
   provider.connection.onLogs("all", (logs) => {
-    console.log(logs);
+    console.log("Transaction logs:", logs);
   });
 });
 ```
 
-Common issues:
-- Account size too small → Increase in `#[account]` space
-- PDA collision → Change seeds
-- Math overflow → Use checked operations
-- Insufficient rent → Add more lamports
+In Rust:
+```bash
+# Run with debug output
+RUST_LOG=debug anchor test
+
+# Or in code, add:
+msg!("Debug message: {:?}", variable);
+```
+
+### Common Issues
+
+#### 1. Account Size Too Small
+**Error**: "Account data too small for instruction"
+
+**Solution**: Increase space allocation in account constraints:
+```rust
+#[account(
+    init,
+    payer = user,
+    space = 8 + YourAccount::INIT_SPACE, // Adjust INIT_SPACE
+    seeds = [...],
+    bump
+)]
+```
+
+#### 2. PDA Collision
+**Error**: "Account already exists"
+
+**Solution**: Change PDA seeds to be more unique:
+```rust
+seeds = [b"market", creator.key().as_ref(), question.as_bytes()],
+```
+
+#### 3. Math Overflow
+**Error**: "Math overflow occurred"
+
+**Solution**: Use checked math operations:
+```rust
+let result = amount
+    .checked_mul(fee_bps as u64)
+    .ok_or(ErrorCode::MathOverflow)?;
+```
+
+#### 4. Insufficient Rent
+**Error**: "Insufficient funds for rent"
+
+**Solution**: Add more lamports or check rent exemption:
+```bash
+# Check rent required for account size
+solana rent <BYTES>
+
+# Request devnet airdrop
+solana airdrop 2
+```
+
+#### 5. Program Not Found
+**Error**: "Program not deployed"
+
+**Solution**: 
+```bash
+# Verify program ID in Anchor.toml
+anchor keys list
+
+# Redeploy if needed
+anchor deploy
+```
+
+#### 6. Frontend Connection Issues
+**Error**: "Failed to fetch" or network errors
+
+**Solution**:
+- Check RPC endpoint in frontend config
+- Verify network setting (devnet/mainnet)
+- Check wallet is connected
+- Try different RPC provider
+
+#### 7. Transaction Simulation Failed
+**Error**: Various transaction errors
+
+**Solution**:
+```bash
+# Check recent blockhash
+solana cluster-version
+
+# Verify account balances
+solana balance
+
+# Check transaction with explorer
+# Use transaction signature from error
+```
+
+### Debug Commands
+
+```bash
+# Verify program deployment
+solana program show <PROGRAM_ID>
+
+# Check account data
+solana account <ACCOUNT_ADDRESS> --output json
+
+# View recent logs
+solana logs --commitment confirmed
+
+# Simulate transaction (add to test)
+await provider.simulate(tx);
+
+# Get transaction details
+solana confirm <TRANSACTION_SIGNATURE> -v
+```
 
 ## 🔐 Production Checklist
 
-Before mainnet:
-- [ ] Audit code for vulnerabilities
-- [ ] Test all edge cases
+Before deploying to mainnet:
+
+### Smart Contract
+- [ ] Comprehensive code audit
+- [ ] All edge cases tested
+- [ ] Overflow/underflow checks verified
+- [ ] Security review completed
 - [ ] Verify program build
 - [ ] Set correct protocol authority
-- [ ] Fund protocol wallet
+- [ ] Fund protocol wallet with SOL
 - [ ] Initialize treasury
-- [ ] Test with real money (small amounts)
+- [ ] Test with real SOL (small amounts first)
 - [ ] Monitor initial markets closely
-- [ ] Have upgrade authority ready
+- [ ] Prepare upgrade authority management
+- [ ] Consider making program immutable when stable
+
+### Frontend
+- [ ] Update program ID for mainnet
+- [ ] Configure mainnet RPC endpoints
+- [ ] Test wallet connections
+- [ ] Verify all transactions work
+- [ ] Test error handling
+- [ ] Security headers configured
+- [ ] Rate limiting implemented
+- [ ] Analytics set up
+- [ ] User documentation prepared
+- [ ] Support system ready
+
+### Infrastructure
+- [ ] Backup upgrade authority keys securely
+- [ ] Set up monitoring and alerts
+- [ ] Prepare incident response plan
+- [ ] Document recovery procedures
+- [ ] Test disaster recovery
+- [ ] Set up logging infrastructure
 
 ## 📝 IDL Generation
 
@@ -561,25 +964,62 @@ target/idl/prediction_market.json
 cp target/idl/prediction_market.json ../frontend/src/idl/
 ```
 
-## 🤝 Contributing
+## 📝 IDL Generation
 
-To add features:
-1. Add instruction to `lib.rs`
-2. Add tests
-3. Update IDL
-4. Build and test
-5. Deploy to devnet
-6. Update frontend
+The IDL (Interface Definition Language) is automatically generated on build:
+
+```bash
+# Build generates IDL automatically
+anchor build
+
+# IDL location
+target/idl/prediction_market.json
+
+# Copy to frontend (if needed manually)
+cp target/idl/prediction_market.json frontend/src/lib/idl.ts
+```
+
+The IDL is used by the frontend to interact with the smart contract and provides:
+- Type definitions for all accounts
+- Instruction signatures
+- Error codes
+- Event definitions
 
 ## 📚 Resources
 
-- [Anchor Docs](https://www.anchor-lang.com/)
-- [Solana Docs](https://docs.solana.com/)
-- [Solana Cookbook](https://solanacookbook.com/)
-- [Anchor Examples](https://github.com/coral-xyz/anchor/tree/master/examples)
+### Official Documentation
+- [Anchor Framework](https://www.anchor-lang.com/) - Smart contract framework
+- [Solana Documentation](https://docs.solana.com/) - Blockchain documentation
+- [Solana Cookbook](https://solanacookbook.com/) - Recipes and examples
+- [Next.js Documentation](https://nextjs.org/docs) - Frontend framework
+
+### Code Examples
+- [Anchor Examples](https://github.com/coral-xyz/anchor/tree/master/examples) - Official examples
+- [Solana Program Examples](https://github.com/solana-developers/program-examples) - Community examples
+
+### Tools & Libraries
+- [Solana Web3.js](https://solana-labs.github.io/solana-web3.js/) - JavaScript SDK
+- [Solana Wallet Adapter](https://github.com/solana-labs/wallet-adapter) - Wallet integration
+- [Anchor TypeScript](https://coral-xyz.github.io/anchor/ts/) - TypeScript client
+
+### Explorers
+- [Solana Explorer](https://explorer.solana.com/) - Official explorer
+- [Solscan](https://solscan.io/) - Advanced explorer
+- [SolanaFM](https://solana.fm/) - Alternative explorer
+
+## 🤝 Support & Community
+
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/JB1HEY/sentient.send/issues)
+- **Discussions**: Join conversations in GitHub Discussions
+- **Documentation**: Check this README and inline code comments
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🔧 Useful Commands
 
+### Smart Contract
 ```bash
 # Clean build
 anchor clean && anchor build
@@ -593,13 +1033,64 @@ anchor deploy --provider.cluster devnet
 # Get program size
 du -h target/deploy/prediction_market.so
 
+# List program keys
+anchor keys list
+
+# Build without deploy
+anchor build
+
+# Run tests
+npm test
+```
+
+### Treasury Management
+```bash
+# Initialize treasury (one-time setup)
+npm run init-treasury
+
+# Inspect treasury stats
+npm run inspect-treasury
+
+# Check treasury account
+solana account <TREASURY_PDA_ADDRESS>
+```
+
+### Frontend
+```bash
+# Install dependencies
+cd frontend && npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+
+# Lint code
+npm run lint
+```
+
+### Solana CLI
+```bash
 # Estimate rent
 solana rent BYTES
 
 # Close program (careful!)
 solana program close YOUR_PROGRAM_ID
+
+# Check program info
+solana program show YOUR_PROGRAM_ID
+
+# Get account info
+solana account <ACCOUNT_ADDRESS>
+
+# Monitor logs
+solana logs | grep YOUR_PROGRAM_ID
 ```
 
 ---
 
-Built with Anchor on Solana ⚓
+Built with ⚓ Anchor on Solana
