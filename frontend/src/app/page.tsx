@@ -11,47 +11,85 @@ import { useProgram } from '@/hooks/useProgram';
 import { IDL } from '@/lib/idl';
 import Image from 'next/image';
 
+type TabType = 'all' | 'trending' | 'new' | 'ending-soon' | 'high-volume';
+
 export default function Home() {
   const [markets, setMarkets] = useState<MarketWithPrices[]>([]);
   const [filteredMarkets, setFilteredMarkets] = useState<MarketWithPrices[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<TabType>('all');
   const { connection } = useConnection();
   const program = useProgram();
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
 
   useEffect(() => {
-    // Load markets even without wallet connected
     loadMarkets();
   }, [connection]);
 
   useEffect(() => {
-    // Filter markets based on search query
+    // Filter markets based on search and active tab
+    let filtered = [...markets];
+
+    // Apply search filter first
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      const filtered = markets.filter(market => 
+      filtered = filtered.filter(market => 
         market.question.toLowerCase().includes(query) ||
         market.description.toLowerCase().includes(query) ||
         market.sideNames.some(name => name.toLowerCase().includes(query))
       );
-      setFilteredMarkets(filtered);
-    } else {
-      setFilteredMarkets(markets);
     }
-  }, [searchQuery, markets]);
 
-  useEffect(() => {
-    // Load markets even without wallet connected
-    loadMarkets();
-  }, [connection]);
+    // Apply tab filter
+    switch (activeTab) {
+      case 'trending':
+        // Sort by volume (high to low)
+        filtered = filtered.sort((a, b) => b.volume - a.volume);
+        break;
+      
+      case 'new':
+        // Sort by creation time (newest first)
+        // Using market address as proxy since newer markets have higher addresses typically
+        filtered = filtered.sort((a, b) => {
+          const aNum = parseInt(a.publicKey.toString().slice(0, 8), 16);
+          const bNum = parseInt(b.publicKey.toString().slice(0, 8), 16);
+          return bNum - aNum;
+        });
+        break;
+      
+      case 'ending-soon':
+        // Sort by end time (soonest first)
+        filtered = filtered.sort((a, b) => 
+          a.endDate.getTime() - b.endDate.getTime()
+        );
+        break;
+      
+      case 'high-volume':
+        // Filter markets with >1 SOL volume and sort
+        filtered = filtered
+          .filter(m => m.volume >= 1)
+          .sort((a, b) => b.volume - a.volume);
+        break;
+      
+      case 'all':
+      default:
+        // Sort by end time (soonest first) for "all"
+        filtered = filtered.sort((a, b) => 
+          a.endDate.getTime() - b.endDate.getTime()
+        );
+        break;
+    }
+
+    setFilteredMarkets(filtered);
+  }, [searchQuery, markets, activeTab]);
 
   async function loadMarkets() {
     try {
       setLoading(true);
       setError('');
       
-      // Create a temporary program instance if wallet not connected
       let programToUse = program;
       
       if (!programToUse) {
@@ -59,7 +97,6 @@ export default function Home() {
         const { AnchorProvider, Program } = await import('@coral-xyz/anchor');
         const { Keypair } = await import('@solana/web3.js');
         
-        // Create a dummy wallet for read-only access
         const dummyWallet = {
           publicKey: Keypair.generate().publicKey,
           signTransaction: async () => { throw new Error('Read-only'); },
@@ -79,9 +116,7 @@ export default function Home() {
 
       console.log('🔍 Fetching markets from program:', programToUse.programId.toString());
       
-      // Use Anchor's built-in account fetcher instead of manual parsing
-      // This is much more reliable and handles all the complexity
-      // @ts-ignore - TypeScript doesn't know about the market account type
+      // @ts-ignore
       const marketAccounts = await programToUse.account.market.all();
       
       console.log('✅ Found', marketAccounts.length, 'total market accounts');
@@ -99,11 +134,6 @@ export default function Home() {
         try {
           const market = account as any;
           
-          console.log('📊 Processing market:', publicKey.toString());
-          console.log('   Question:', market.question);
-          console.log('   Resolved:', market.resolved);
-          console.log('   End timestamp:', new Date(market.endTimestamp.toNumber() * 1000).toLocaleString());
-
           // Calculate prices (% of total pool for each side)
           const totalPoolNum = market.totalPool.toNumber();
           const sidePrices = [];
@@ -152,9 +182,6 @@ export default function Home() {
             sidePrices,
             sideNames,
           };
-
-          console.log('   Status:', isActive ? '✅ Active' : '❌ Inactive/Resolved');
-          console.log('   Sides:', sideNames.join(', '));
           
           marketsWithPrices.push(marketWithPrices);
         } catch (err) {
@@ -168,24 +195,23 @@ export default function Home() {
       console.log('📈 Total markets:', marketsWithPrices.length);
       console.log('✅ Active markets:', activeMarkets.length);
       
-      if (activeMarkets.length === 0 && marketsWithPrices.length > 0) {
-        console.log('ℹ️ All markets are either resolved or ended');
-      }
-      
       setMarkets(activeMarkets);
       
     } catch (error: any) {
       console.error('❌ Error loading markets:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        logs: error.logs,
-      });
       setError(error.message || 'Failed to load markets');
     } finally {
       setLoading(false);
     }
   }
+
+  const tabs = [
+    { id: 'all' as TabType, label: 'All Markets'},
+    { id: 'trending' as TabType, label: 'Trending'},
+    { id: 'new' as TabType, label: 'New'},
+    { id: 'ending-soon' as TabType, label: 'Ending Soon'},
+    { id: 'high-volume' as TabType, label: 'High Volume'},
+  ];
 
   return (
     <div className="min-h-screen bg-dark-bg">
@@ -213,8 +239,28 @@ export default function Home() {
               {loading ? 'Loading...' : 'Refresh Markets'}
             </button>
           </div>
-          
-          {/* Debug Info - removed as markets now load without wallet */}
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-8">
+          <div className="border-b border-dark-border">
+            <nav className="flex space-x-8 overflow-x-auto">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-4 px-2 border-b-2 font-medium text-sm whitespace-nowrap transition ${
+                    activeTab === tab.id
+                      ? 'border-white text-white'
+                      : 'border-transparent text-dark-muted hover:text-white hover:border-dark-border'
+                  }`}
+                >
+                  <span className="mr-2">{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
         </div>
 
         {/* Error Message */}
@@ -228,7 +274,6 @@ export default function Home() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-red-400">{error}</p>
-                <p className="text-xs text-red-500 mt-1">Check the browser console for more details</p>
               </div>
             </div>
           </div>
@@ -238,7 +283,7 @@ export default function Home() {
         <div className="mb-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-dark-text">
-              {searchQuery ? `Search Results for "${searchQuery}"` : 'Active Markets'}
+              {searchQuery ? `Search Results for "${searchQuery}"` : tabs.find(t => t.id === activeTab)?.label}
             </h2>
             {searchQuery && (
               <a 
@@ -254,7 +299,6 @@ export default function Home() {
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
               <p className="mt-4 text-dark-muted">Loading markets...</p>
-              <p className="mt-2 text-sm text-dark-muted">This may take a few seconds</p>
             </div>
           ) : filteredMarkets.length === 0 && searchQuery ? (
             <div className="text-center py-12 bg-dark-card rounded-lg shadow border border-dark-border">
@@ -270,8 +314,20 @@ export default function Home() {
             </div>
           ) : filteredMarkets.length === 0 ? (
             <div className="text-center py-12 bg-dark-card rounded-lg shadow border border-dark-border">
-              <div className="text-6xl mb-4">📊</div>
-              <h3 className="text-xl font-semibold text-dark-text mb-2">No Active Markets</h3>
+              <div className="text-6xl mb-4">
+                {activeTab === 'trending' && '📈'}
+                {activeTab === 'new' && '✨'}
+                {activeTab === 'ending-soon' && '⏰'}
+                {activeTab === 'high-volume' && '💰'}
+                {activeTab === 'all' && '📊'}
+              </div>
+              <h3 className="text-xl font-semibold text-dark-text mb-2">
+                {activeTab === 'high-volume' && 'No High Volume Markets Yet'}
+                {activeTab === 'trending' && 'No Trending Markets Yet'}
+                {activeTab === 'new' && 'No New Markets'}
+                {activeTab === 'ending-soon' && 'No Markets Ending Soon'}
+                {activeTab === 'all' && 'No Active Markets'}
+              </h3>
               <p className="text-dark-muted mb-6">Be the first to create a prediction market!</p>
               <a
                 href="/create"
@@ -282,15 +338,15 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {searchQuery && (
-                <p className="text-dark-muted mb-4">
-                  Found {filteredMarkets.length} market{filteredMarkets.length !== 1 ? 's' : ''}
-                </p>
-              )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMarkets.map((market) => (
                   <MarketCard key={market.publicKey.toString()} market={market} />
                 ))}
+              </div>
+              
+              {/* Results count */}
+              <div className="mt-6 text-center text-sm text-dark-muted">
+                Showing {filteredMarkets.length} market{filteredMarkets.length !== 1 ? 's' : ''}
               </div>
             </>
           )}
