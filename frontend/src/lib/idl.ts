@@ -601,6 +601,19 @@ export const IDL = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "winning_sides",
+            "type": {
+              "array": [
+                "bool",
+                10
+              ]
+            }
+          },
+          {
+            "name": "num_winners",
+            "type": "u8"
           }
         ]
       }

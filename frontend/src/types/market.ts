@@ -31,6 +31,8 @@ export interface Market {
   numBettors: number;
   creationAmount: BN;
   bump: number;
+  winningSides: boolean[]; // NEW: array marking which sides won
+  numWinners: number; // NEW: number of sides that tied
 }
 
 export interface UserPosition {
@@ -46,10 +48,12 @@ export interface UserPosition {
 export interface MarketWithPrices extends Market {
   endDate: Date;
   isActive: boolean;
-  totalLiquidity: number; // in USDC
-  volume: number; // in USDC
+  totalLiquidity: number; // in SOL
+  volume: number; // in SOL
   sidePrices: number[]; // percentage for each side
   sideNames: string[]; // decoded side names
+  isTie: boolean; // NEW: whether market ended in a tie
+  winningNames: string[]; // NEW: names of all winning sides
 }
 
 export interface Treasury {

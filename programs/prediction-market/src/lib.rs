@@ -116,6 +116,8 @@ pub mod prediction_market {
         market.num_bettors = 1;
         market.creation_amount = initial_amount;
         market.bump = ctx.bumps.market;
+        market.winning_sides = [false; MAX_SIDES];
+        market.num_winners = 0;
 
         // Split net amount equally across sides
         let amount_per_side = net_amount
@@ -272,25 +274,38 @@ pub mod prediction_market {
         require!(market.resolved, ErrorCode::MarketNotEnded);
         require!(!position.claimed, ErrorCode::AlreadyClaimed);
 
-        let winning_side_index = market.winning_side_index;
-        let user_bet = position.bets[winning_side_index as usize];
+        // Calculate total user bet on all winning sides
+        let mut total_user_bet_on_winners = 0u64;
+        let mut total_winning_side_amounts = 0u64;
 
-        require!(user_bet.has_bet && user_bet.amount > 0, ErrorCode::NoWinnings);
+        for i in 0..market.num_sides as usize {
+            if market.winning_sides[i] {
+                let user_bet = position.bets[i];
+                if user_bet.has_bet && user_bet.amount > 0 {
+                    total_user_bet_on_winners = total_user_bet_on_winners
+                        .checked_add(user_bet.amount)
+                        .ok_or(ErrorCode::MathOverflow)?;
+                }
+                total_winning_side_amounts = total_winning_side_amounts
+                    .checked_add(market.sides[i].total_amount)
+                    .ok_or(ErrorCode::MathOverflow)?;
+            }
+        }
 
-        let winning_side = &market.sides[winning_side_index as usize];
-        require!(winning_side.total_amount > 0, ErrorCode::NoWinnings);
+        require!(total_user_bet_on_winners > 0, ErrorCode::NoWinnings);
+        require!(total_winning_side_amounts > 0, ErrorCode::NoWinnings);
 
-        // Calculate payout
-        let payout = (user_bet.amount as u128)
+        // Calculate payout: user's proportion of winning bets * total pool
+        let payout = (total_user_bet_on_winners as u128)
             .checked_mul(market.total_pool as u128)
             .ok_or(ErrorCode::MathOverflow)?
-            .checked_div(winning_side.total_amount as u128)
+            .checked_div(total_winning_side_amounts as u128)
             .ok_or(ErrorCode::MathOverflow)?;
 
         let payout = payout as u64;
         require!(payout > 0, ErrorCode::NoWinnings);
 
-        // Transfer SOL from market to user (do this before updating position)
+        // Transfer SOL from market to user
         let market_lamports = ctx.accounts.market.to_account_info();
         let user_lamports = ctx.accounts.user.to_account_info();
         **market_lamports.try_borrow_mut_lamports()? -= payout;
@@ -373,7 +388,7 @@ pub mod prediction_market {
     }
 }
 
-// Helper function to resolve market
+// Helper function to resolve market with tie support
 fn try_resolve_market(market: &mut Market) -> Result<()> {
     if market.resolved {
         return Ok(());
@@ -384,19 +399,31 @@ fn try_resolve_market(market: &mut Market) -> Result<()> {
         return Ok(());
     }
 
-    // Find winning side (most lamports)
-    let mut winning_side_index = 0u8;
-    let mut max_amount = market.sides[0].total_amount;
-
-    for i in 1..market.num_sides {
+    // Find maximum amount
+    let mut max_amount = 0u64;
+    for i in 0..market.num_sides {
         if market.sides[i as usize].total_amount > max_amount {
             max_amount = market.sides[i as usize].total_amount;
-            winning_side_index = i;
         }
     }
 
+    // Find all sides that tied for the win
+    let mut num_winners = 0u8;
+    let mut first_winner_index = 0u8;
+    
+    for i in 0..market.num_sides {
+        if market.sides[i as usize].total_amount == max_amount {
+            market.winning_sides[i as usize] = true;
+            num_winners += 1;
+            if num_winners == 1 {
+                first_winner_index = i;
+            }
+        }
+    }
+
+    market.num_winners = num_winners;
+    market.winning_side_index = first_winner_index; // For backwards compatibility
     market.resolved = true;
-    market.winning_side_index = winning_side_index;
 
     Ok(())
 }
@@ -530,7 +557,7 @@ pub struct Market {
     pub description: String,
     pub end_timestamp: i64,
     pub resolved: bool,
-    pub winning_side_index: u8,
+    pub winning_side_index: u8, // Kept for backwards compatibility, use winning_sides instead
     pub total_pool: u64,
     pub num_sides: u8,
     pub sides: [Side; MAX_SIDES],
@@ -541,6 +568,8 @@ pub struct Market {
     pub num_bettors: u32,
     pub creation_amount: u64,
     pub bump: u8,
+    pub winning_sides: [bool; MAX_SIDES], // New: array marking which sides won (for ties)
+    pub num_winners: u8, // New: how many sides tied for the win
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace)]
