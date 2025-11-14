@@ -9,6 +9,7 @@ import { PublicKey } from '@solana/web3.js';
 import { LAMPORTS_PER_SOL, PROTOCOL_AUTHORITY } from '@/lib/constants';
 import { getPositionPda, getTreasuryPda } from '@/lib/anchor';
 import Link from 'next/link';
+import { calculateTiePayout, hasWinningBets, getMarketResultText } from '@/lib/market-utils';
 
 interface MarketPosition {
   marketAddress: string;
@@ -16,6 +17,9 @@ interface MarketPosition {
   marketEndDate: Date;
   marketResolved: boolean;
   winningSideIndex: number;
+  winningSides: boolean[];
+  numWinners: number;
+  isTie: boolean;
   isActive: boolean;
   totalPool: number;
   sides: {
@@ -27,6 +31,7 @@ interface MarketPosition {
     sideName: string;
     amount: number;
     hasBet: boolean;
+    isWinner: boolean;
   }[];
   totalInvested: number;
   claimed: boolean;
@@ -150,35 +155,36 @@ export default function PortfolioPage() {
             });
           }
 
-          // Get user's bets
+          // Get user's bets with winner flags
           const userBets = position.bets
             .map((bet: any, index: number) => ({
               sideIndex: index,
               sideName: sides[index]?.name || `Side ${index}`,
               amount: bet.amount.toNumber() / LAMPORTS_PER_SOL,
               hasBet: bet.hasBet,
+              isWinner: market.resolved && market.winningSides && market.winningSides[index],
             }))
             .filter((bet: any) => bet.hasBet && bet.amount > 0);
 
-          // Calculate estimated payout if market is resolved
-          let estimatedPayout = 0;
-          if (market.resolved && !position.claimed) {
-            const winningSideIndex = market.winningSideIndex;
-            const userBet = position.bets[winningSideIndex];
-            
-            if (userBet && userBet.hasBet && userBet.amount.toNumber() > 0) {
-              const winningSide = market.sides[winningSideIndex];
-              if (winningSide.totalAmount.toNumber() > 0) {
-                estimatedPayout = 
-                  (userBet.amount.toNumber() / winningSide.totalAmount.toNumber()) * 
-                  market.totalPool.toNumber() / 
-                  LAMPORTS_PER_SOL;
-              }
-            }
-          }
-
+          // Calculate estimated payout using tie-aware function
           const endDate = new Date(market.endTimestamp.toNumber() * 1000);
           const isActive = !market.resolved && Date.now() < endDate.getTime();
+          
+          // Create a temporary market object for calculation
+          const tempMarket = {
+            resolved: market.resolved,
+            winningSides: market.winningSides || Array(10).fill(false),
+            numWinners: market.numWinners || 1,
+            totalPool: market.totalPool,
+            numSides: market.numSides,
+            sides: market.sides,
+          };
+          
+          const estimatedPayout = market.resolved && !position.claimed 
+            ? calculateTiePayout(tempMarket as any, position)
+            : 0;
+
+          const isTie = market.resolved && market.numWinners > 1;
 
           userPositions.push({
             marketAddress: marketPubkey.toString(),
@@ -186,6 +192,9 @@ export default function PortfolioPage() {
             marketEndDate: endDate,
             marketResolved: market.resolved,
             winningSideIndex: market.winningSideIndex,
+            winningSides: market.winningSides || Array(10).fill(false),
+            numWinners: market.numWinners || 1,
+            isTie,
             isActive,
             totalPool: market.totalPool.toNumber() / LAMPORTS_PER_SOL,
             sides,
@@ -417,17 +426,24 @@ export default function PortfolioPage() {
                               >
                                 {position.marketQuestion}
                               </Link>
-                              <div className="flex items-center space-x-3 mt-2 text-sm">
+                              <div className="flex items-center space-x-3 mt-2 text-sm flex-wrap gap-2">
                                 {position.isActive ? (
                                   <span className="flex items-center text-white">
                                     <span className="inline-block w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></span>
                                     Active
                                   </span>
                                 ) : position.marketResolved ? (
-                                  <span className="flex items-center text-dark-muted">
-                                    <span className="inline-block w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
-                                    Resolved
-                                  </span>
+                                  <>
+                                    <span className="flex items-center text-dark-muted">
+                                      <span className="inline-block w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
+                                      Resolved
+                                    </span>
+                                    {position.isTie && position.numWinners > 1 && (
+                                      <span className="text-xs bg-white/10 text-white px-2 py-1 rounded">
+                                        {position.numWinners}-way tie
+                                      </span>
+                                    )}
+                                  </>
                                 ) : (
                                   <span className="flex items-center text-gray-400">
                                     <span className="inline-block w-2 h-2 bg-gray-500 rounded-full mr-1"></span>
@@ -461,15 +477,18 @@ export default function PortfolioPage() {
                               </Link>
                             ) : (
                               <span className="bg-dark-bg text-dark-muted px-4 py-2 rounded-lg text-sm border border-dark-border">
-                                No Winnings
+                                {position.isTie 
+                                  ? 'No Winnings (No Winning Bets)'
+                                  : 'No Winnings'
+                                }
                               </span>
                             )}
                           </div>
 
-                          {/* Your Bets */}
+                          {/* Your Bets with Tie Winner Indicators */}
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
                             {position.userBets.map((bet, betIndex) => {
-                              const isWinningSide = position.marketResolved && bet.sideIndex === position.winningSideIndex;
+                              const isWinningSide = bet.isWinner;
                               return (
                                 <div
                                   key={betIndex}
@@ -489,7 +508,9 @@ export default function PortfolioPage() {
                                       </div>
                                     </div>
                                     {isWinningSide && (
-                                      <span className="text-white text-xl">🏆</span>
+                                      <span className="text-white text-lg">
+                                        {position.isTie && position.numWinners > 1 ? '🏆' : '🏆'}
+                                      </span>
                                     )}
                                   </div>
                                 </div>
@@ -497,7 +518,7 @@ export default function PortfolioPage() {
                             })}
                           </div>
 
-                          {/* Stats */}
+                          {/* Stats with Tie Information */}
                           <div className="flex justify-between items-center text-sm pt-3 border-t border-dark-border">
                             <div className="flex space-x-4">
                               <span className="text-dark-muted">
@@ -515,7 +536,18 @@ export default function PortfolioPage() {
                             </div>
                             {position.marketResolved && (
                               <span className="text-dark-muted text-xs">
-                                Winner: {position.sides[position.winningSideIndex]?.name}
+                                {position.isTie && position.numWinners > 1 ? (
+                                  <>
+                                    {position.numWinners}-way tie: {
+                                      position.userBets
+                                        .filter(bet => bet.isWinner)
+                                        .map(bet => bet.sideName)
+                                        .join(', ')
+                                    }
+                                  </>
+                                ) : (
+                                  <>Winner: {position.sides[position.winningSideIndex]?.name}</>
+                                )}
                               </span>
                             )}
                           </div>

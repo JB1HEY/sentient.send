@@ -17,6 +17,7 @@ import Navbar from '@/components/Navbar';
 import { useParams } from 'next/navigation';
 import { MarketWithPrices, UserPosition } from '@/types/market';
 import { IDL } from '@/lib/idl';
+import { processMarketData, calculateTiePayout, hasWinningBets, getMarketResultText } from '@/lib/market-utils';
 
 export default function MarketDetailPage() {
     const params = useParams();
@@ -45,7 +46,6 @@ export default function MarketDetailPage() {
         try {
             setLoading(true);
             
-            // Create a program instance (with or without wallet)
             let programToUse = program;
             
             if (!programToUse) {
@@ -53,7 +53,6 @@ export default function MarketDetailPage() {
                 const { AnchorProvider, Program } = await import('@coral-xyz/anchor');
                 const { Keypair } = await import('@solana/web3.js');
                 
-                // Create a dummy wallet for read-only access
                 const dummyWallet = {
                     publicKey: Keypair.generate().publicKey,
                     signTransaction: async () => { throw new Error('Read-only'); },
@@ -74,7 +73,6 @@ export default function MarketDetailPage() {
             const marketPubkey = new PublicKey(marketId);
             console.log('Loading market:', marketPubkey.toString());
 
-            // Fetch market using Anchor
             // @ts-ignore
             const marketAccount = await programToUse.account.market.fetch(marketPubkey);
 
@@ -84,63 +82,14 @@ export default function MarketDetailPage() {
                 return;
             }
 
-            const market = marketAccount as any;
+            // Use utility function to process market data with tie support
+            const marketWithPrices = processMarketData(marketPubkey, marketAccount);
 
-            // Check if current user is creator
             if (publicKey) {
-                setIsCreator(market.creator.toString() === publicKey.toString());
+                setIsCreator(marketWithPrices.creator.toString() === publicKey.toString());
             }
 
-            // Calculate prices (% of total pool for each side)
-            const totalPoolNum = market.totalPool.toNumber();
-            const sidePrices = [];
-            const sideNames = [];
-
-            for (let i = 0; i < market.numSides; i++) {
-                const side = market.sides[i];
-
-                // Decode side name
-                const nameBytes = side.name.slice(0, side.nameLen);
-                const name = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(nameBytes));
-                sideNames.push(name);
-
-                // Calculate percentage
-                const sidePercent = totalPoolNum > 0
-                    ? (side.totalAmount.toNumber() / totalPoolNum) * 100
-                    : 0;
-                sidePrices.push(sidePercent);
-            }
-
-            const endDate = new Date(market.endTimestamp.toNumber() * 1000);
-            const isActive = !market.resolved && Date.now() < endDate.getTime();
-
-            const marketWithPrice: MarketWithPrices = {
-                publicKey: marketPubkey,
-                creator: market.creator,
-                question: market.question,
-                description: market.description,
-                endTimestamp: market.endTimestamp,
-                resolved: market.resolved,
-                winningSideIndex: market.winningSideIndex,
-                totalPool: market.totalPool,
-                numSides: market.numSides,
-                sides: market.sides,
-                feePool: market.feePool,
-                creatorFeesDistributed: market.creatorFeesDistributed,
-                protocolFeesDistributed: market.protocolFeesDistributed,
-                totalVolume: market.totalVolume,
-                numBettors: market.numBettors,
-                creationAmount: market.creationAmount,
-                bump: market.bump,
-                endDate,
-                isActive,
-                totalLiquidity: totalPoolNum / LAMPORTS_PER_SOL,
-                volume: market.totalVolume.toNumber() / LAMPORTS_PER_SOL,
-                sidePrices,
-                sideNames,
-            };
-
-            setMarket(marketWithPrice);
+            setMarket(marketWithPrices);
 
             // Load user position if wallet connected
             if (publicKey && programToUse) {
@@ -150,7 +99,6 @@ export default function MarketDetailPage() {
                     const positionData = await programToUse.account.userPosition.fetch(positionPda);
                     setPosition(positionData as any);
                 } catch (err) {
-                    // Position doesn't exist yet - that's ok
                     setPosition(null);
                 }
             }
@@ -207,7 +155,6 @@ export default function MarketDetailPage() {
 
             setSuccess(`Bet placed successfully! Transaction: ${tx.slice(0, 8)}...`);
 
-            // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
 
@@ -269,7 +216,6 @@ export default function MarketDetailPage() {
 
             setSuccess(`Winnings claimed! Transaction: ${tx.slice(0, 8)}...`);
 
-            // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
         } catch (err: any) {
@@ -307,7 +253,6 @@ export default function MarketDetailPage() {
 
             console.log('Resolving market:', market.publicKey.toString());
 
-            // Call the new resolve_market instruction
             const tx = await program.methods
                 .resolveMarket()
                 .accounts({
@@ -318,7 +263,6 @@ export default function MarketDetailPage() {
 
             setSuccess(`Market resolved! Transaction: ${tx.slice(0, 8)}...`);
 
-            // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
         } catch (err: any) {
@@ -373,7 +317,6 @@ export default function MarketDetailPage() {
 
             setSuccess(`Creator fees claimed! Transaction: ${tx.slice(0, 8)}...`);
 
-            // Reload market data
             await new Promise(resolve => setTimeout(resolve, 2000));
             await loadMarket();
         } catch (err: any) {
@@ -434,13 +377,7 @@ export default function MarketDetailPage() {
     const hoursLeft = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
 
-    const estimatedPayout = position && market.resolved ? (() => {
-        const userBet = position.bets[market.winningSideIndex];
-        if (!userBet || userBet.amount.toNumber() === 0) return 0;
-        const winningSide = market.sides[market.winningSideIndex];
-        if (winningSide.totalAmount.toNumber() === 0) return 0;
-        return ((userBet.amount.toNumber() / winningSide.totalAmount.toNumber()) * market.totalPool.toNumber()) / LAMPORTS_PER_SOL;
-    })() : 0;
+    const estimatedPayout = position && market.resolved ? calculateTiePayout(market, position) : 0;
 
     const creatorFeesAvailable = market.feePool.toNumber() / 2 - market.creatorFeesDistributed.toNumber();
     const hasClaimableCreatorFees = isCreator && market.resolved && creatorFeesAvailable > 0;
@@ -506,7 +443,7 @@ export default function MarketDetailPage() {
                                     <div className="flex items-center text-sm">
                                         <span className="inline-block w-2 h-2 bg-dark-muted rounded-full mr-2"></span>
                                         <span className="text-dark-muted">
-                                            Resolved - Winner: {market.sideNames[market.winningSideIndex]}
+                                            {getMarketResultText(market)}
                                         </span>
                                     </div>
                                 ) : (
@@ -521,29 +458,33 @@ export default function MarketDetailPage() {
                         </div>
                     </div>
 
-                    {/* Sides Grid */}
+                    {/* Sides Grid with Tie Winner Support */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         {market.sideNames.map((name, idx) => {
                             const side = market.sides[idx];
                             const isLeading = idx === leadingSideIndex;
-                            const isWinner = market.resolved && idx === market.winningSideIndex;
+                            const isWinner = market.resolved && market.winningSides[idx];
+                            
                             return (
                                 <div
                                     key={idx}
-                                    className={`p-4 rounded-lg border-2 ${isWinner
-                                        ? 'border-white bg-white/10'
-                                        : isLeading
+                                    className={`p-4 rounded-lg border-2 ${
+                                        isWinner
+                                            ? 'border-white bg-white/10'
+                                            : isLeading && !market.resolved
                                             ? 'border-white bg-white/5'
                                             : 'border-dark-border bg-dark-bg'
-                                        }`}
+                                    }`}
                                 >
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="font-semibold text-white">{name}</div>
+                                        {isWinner && (
+                                            <span className="text-xs bg-white text-black px-2 py-1 rounded">
+                                                {market.isTie && market.numWinners > 1 ? 'Tied 🏆' : 'Winner 🏆'}
+                                            </span>
+                                        )}
                                         {isLeading && !market.resolved && (
                                             <span className="text-xs bg-white text-black px-2 py-1 rounded">Leading</span>
-                                        )}
-                                        {isWinner && (
-                                            <span className="text-xs bg-white text-black px-2 py-1 rounded">Winner 🏆</span>
                                         )}
                                     </div>
                                     <div className="text-2xl font-bold text-white mb-1">
@@ -560,16 +501,27 @@ export default function MarketDetailPage() {
                         })}
                     </div>
 
-                    {/* Info Box */}
+                    {/* Info Box with Tie Explanation */}
                     <div className="bg-white/5 border-l-4 border-white p-4">
                         <div className="flex items-start gap-1.5">
                             <p className="text-sm text-white leading-tight">
-                                <strong>Winner Takes All:</strong> When this market ends, the side with the most SOL wins.
-                                Winners split the entire {market.totalLiquidity.toFixed(2)} SOL pool proportionally. Losers get nothing.
+                                {market.resolved && market.isTie ? (
+                                    <>
+                                        <strong>Tie Result:</strong> {market.numWinners} sides tied with equal amounts. 
+                                        Winners split the {market.totalLiquidity.toFixed(2)} SOL pool proportionally based on their bets on winning sides.
+                                    </>
+                                ) : (
+                                    <>
+                                        <strong>Winner Takes All:</strong> When this market ends, the side with the most SOL wins.
+                                        Winners split the entire {market.totalLiquidity.toFixed(2)} SOL pool proportionally. 
+                                        {market.numSides > 2 && ' If multiple sides tie, all tied sides split the pool.'}
+                                    </>
+                                )}
                             </p>
                         </div>
                     </div>
                 </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left: Betting Interface or Claiming */}
                     <div className="lg:col-span-2">
@@ -675,7 +627,7 @@ export default function MarketDetailPage() {
                                     <h3 className="text-xl font-bold text-white mb-2">Trading Closed</h3>
                                     <p className="text-dark-muted mb-4">
                                         {market.resolved
-                                            ? `Winner: ${market.sideNames[market.winningSideIndex]}`
+                                            ? getMarketResultText(market)
                                             : 'Market has ended but not yet resolved'}
                                     </p>
                                     {!market.resolved && publicKey && (
@@ -767,12 +719,16 @@ export default function MarketDetailPage() {
                                 <div className="space-y-3 mb-4">
                                     {position.bets.map((bet, idx) => {
                                         if (!bet.hasBet || bet.amount.toNumber() === 0) return null;
-                                        const isWinningSide = market.resolved && idx === market.winningSideIndex;
+                                        const isWinningSide = market.resolved && market.winningSides[idx];
                                         return (
                                             <div key={idx} className="flex justify-between items-center">
                                                 <span className="text-dark-muted">
                                                     {market.sideNames[idx]}
-                                                    {isWinningSide && <span className="ml-2">🏆</span>}
+                                                    {isWinningSide && (
+                                                        <span className="ml-2">
+                                                            {market.isTie && market.numWinners > 1 ? '🏆 (Tied)' : '🏆'}
+                                                        </span>
+                                                    )}
                                                 </span>
                                                 <span className="font-semibold text-white">
                                                     {(bet.amount.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL
@@ -787,12 +743,23 @@ export default function MarketDetailPage() {
                                         </span>
                                     </div>
                                     {market.resolved && estimatedPayout > 0 && (
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-dark-muted">Your Payout</span>
-                                            <span className="font-bold text-white text-xl">
-                                                {estimatedPayout.toFixed(4)} SOL
-                                            </span>
-                                        </div>
+                                        <>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-dark-muted">
+                                                    {market.isTie ? 'Your Share (Tie)' : 'Your Payout'}
+                                                </span>
+                                                <span className="font-bold text-white text-xl">
+                                                    {estimatedPayout.toFixed(4)} SOL
+                                                </span>
+                                            </div>
+                                            {market.isTie && market.numWinners > 1 && (
+                                                <div className="text-xs text-dark-muted bg-white/5 p-2 rounded">
+                                                    💡 You bet on {market.winningSides.filter((w, i) => 
+                                                        w && position.bets[i].hasBet && position.bets[i].amount.toNumber() > 0
+                                                    ).length} of {market.numWinners} winning sides
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
 
@@ -815,7 +782,12 @@ export default function MarketDetailPage() {
 
                                 {market.resolved && estimatedPayout === 0 && !position.claimed && (
                                     <div className="bg-dark-bg border border-dark-border rounded-lg p-3 text-center">
-                                        <span className="text-dark-muted">No winnings (bet on losing side)</span>
+                                        <span className="text-dark-muted">
+                                            {market.isTie 
+                                                ? 'No winnings (didn\'t bet on any winning sides)'
+                                                : 'No winnings (bet on losing side)'
+                                            }
+                                        </span>
                                     </div>
                                 )}
                             </div>
@@ -857,7 +829,7 @@ export default function MarketDetailPage() {
                             </div>
                         </div>
 
-                        {/* Bar Graph Visualization */}
+                        {/* Bar Graph Visualization with Tie Support */}
                         <div className="bg-dark-card rounded-lg shadow-lg p-6 border border-dark-border">
                             <h3 className="text-xl font-bold mb-4 text-white">Distribution</h3>
                             <div className="space-y-3">
@@ -865,14 +837,18 @@ export default function MarketDetailPage() {
                                     const side = market.sides[idx];
                                     const percentage = market.sidePrices[idx];
                                     const isLeading = idx === leadingSideIndex;
-                                    const isWinner = market.resolved && idx === market.winningSideIndex;
+                                    const isWinner = market.resolved && market.winningSides[idx];
                                     
                                     return (
                                         <div key={idx}>
                                             <div className="flex justify-between items-center mb-1">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm font-semibold text-white">{name}</span>
-                                                    {isWinner && <span className="text-xs">🏆</span>}
+                                                    {isWinner && (
+                                                        <span className="text-xs">
+                                                            {market.isTie && market.numWinners > 1 ? '🏆 Tied' : '🏆'}
+                                                        </span>
+                                                    )}
                                                     {isLeading && !market.resolved && (
                                                         <span className="text-xs bg-white text-black px-1.5 py-0.5 rounded">Leading</span>
                                                     )}
@@ -884,7 +860,7 @@ export default function MarketDetailPage() {
                                                     className={`h-full transition-all duration-500 ${
                                                         isWinner
                                                             ? 'bg-white'
-                                                            : isLeading
+                                                            : isLeading && !market.resolved
                                                                 ? 'bg-white/80'
                                                                 : 'bg-white/40'
                                                     }`}
@@ -904,6 +880,15 @@ export default function MarketDetailPage() {
                                     );
                                 })}
                             </div>
+                            
+                            {market.resolved && market.isTie && market.numWinners > 1 && (
+                                <div className="mt-4 p-3 bg-white/5 rounded-lg border border-white/20">
+                                    <p className="text-xs text-white">
+                                        <strong>Tie:</strong> {market.numWinners} sides ended with equal amounts. 
+                                        Bettors on any winning side share the pool proportionally.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
