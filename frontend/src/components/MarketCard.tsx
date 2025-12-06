@@ -18,9 +18,11 @@ export default function MarketCard({ market }: MarketCardProps) {
   const leadingPercent = market.sidePrices[leadingSideIndex];
 
   // Check if there's a tie at the top
+  // Check if there's a tie at the top
   const maxPercent = Math.max(...market.sidePrices);
-  const tiedSides = market.sideNames.filter((_, idx) => 
-    Math.abs(market.sidePrices[idx] - maxPercent) < 0.1
+  // Use toFixed(1) comparison to match visual representation
+  const tiedSides = market.sideNames.filter((_, idx) =>
+    market.sidePrices[idx].toFixed(1) === maxPercent.toFixed(1)
   );
   const hasActiveTie = tiedSides.length > 1 && !market.resolved;
 
@@ -117,7 +119,7 @@ export default function MarketCard({ market }: MarketCardProps) {
               <div className="flex items-center text-sm">
                 <span className="inline-block w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
                 <span className="text-dark-muted">
-                  {market.isTie 
+                  {market.isTie
                     ? `Resolved: ${market.numWinners}-way tie`
                     : `Resolved: ${market.sideNames[market.winningSideIndex]}`
                   }

@@ -45,26 +45,26 @@ export default function MarketDetailPage() {
     async function loadMarket() {
         try {
             setLoading(true);
-            
+
             let programToUse = program;
-            
+
             if (!programToUse) {
                 console.log('⚠️ No wallet connected, creating read-only program instance');
                 const { AnchorProvider, Program } = await import('@coral-xyz/anchor');
                 const { Keypair } = await import('@solana/web3.js');
-                
+
                 const dummyWallet = {
                     publicKey: Keypair.generate().publicKey,
                     signTransaction: async () => { throw new Error('Read-only'); },
                     signAllTransactions: async () => { throw new Error('Read-only'); },
                 };
-                
+
                 const provider = new AnchorProvider(
                     connection,
                     dummyWallet as any,
                     { commitment: 'confirmed' }
                 );
-                
+
                 // @ts-ignore
                 programToUse = new Program(IDL, provider);
                 console.log('✅ Read-only program created');
@@ -384,6 +384,13 @@ export default function MarketDetailPage() {
 
     const leadingSideIndex = market.sidePrices.indexOf(Math.max(...market.sidePrices));
 
+    // Check for active tie
+    const maxPercent = Math.max(...market.sidePrices);
+    const tiedSides = market.sideNames.filter((_, idx) =>
+        market.sidePrices[idx].toFixed(1) === maxPercent.toFixed(1)
+    );
+    const hasActiveTie = tiedSides.length > 1 && !market.resolved;
+
     return (
         <div className="min-h-screen bg-dark-bg">
             <Navbar />
@@ -464,17 +471,16 @@ export default function MarketDetailPage() {
                             const side = market.sides[idx];
                             const isLeading = idx === leadingSideIndex;
                             const isWinner = market.resolved && market.winningSides[idx];
-                            
+
                             return (
                                 <div
                                     key={idx}
-                                    className={`p-4 rounded-lg border-2 ${
-                                        isWinner
+                                    className={`p-4 rounded-lg border-2 ${isWinner
                                             ? 'border-white bg-white/10'
                                             : isLeading && !market.resolved
-                                            ? 'border-white bg-white/5'
-                                            : 'border-dark-border bg-dark-bg'
-                                    }`}
+                                                ? 'border-white bg-white/5'
+                                                : 'border-dark-border bg-dark-bg'
+                                        }`}
                                 >
                                     <div className="flex justify-between items-start mb-2">
                                         <div className="font-semibold text-white">{name}</div>
@@ -483,8 +489,11 @@ export default function MarketDetailPage() {
                                                 {market.isTie && market.numWinners > 1 ? 'Tied 🏆' : 'Winner 🏆'}
                                             </span>
                                         )}
-                                        {isLeading && !market.resolved && (
+                                        {isLeading && !market.resolved && !hasActiveTie && (
                                             <span className="text-xs bg-white text-black px-2 py-1 rounded">Leading</span>
+                                        )}
+                                        {isLeading && !market.resolved && hasActiveTie && (
+                                            <span className="text-xs bg-white text-black px-2 py-1 rounded">Tied</span>
                                         )}
                                     </div>
                                     <div className="text-2xl font-bold text-white mb-1">
@@ -507,13 +516,13 @@ export default function MarketDetailPage() {
                             <p className="text-sm text-white leading-tight">
                                 {market.resolved && market.isTie ? (
                                     <>
-                                        <strong>Tie Result:</strong> {market.numWinners} sides tied with equal amounts. 
+                                        <strong>Tie Result:</strong> {market.numWinners} sides tied with equal amounts.
                                         Winners split the {market.totalLiquidity.toFixed(2)} SOL pool proportionally based on their bets on winning sides.
                                     </>
                                 ) : (
                                     <>
                                         <strong>Winner Takes All:</strong> When this market ends, the side with the most SOL wins.
-                                        Winners split the entire {market.totalLiquidity.toFixed(2)} SOL pool proportionally. 
+                                        Winners split the entire {market.totalLiquidity.toFixed(2)} SOL pool proportionally.
                                         {market.numSides > 2 && ' If multiple sides tie, all tied sides split the pool.'}
                                     </>
                                 )}
@@ -552,9 +561,14 @@ export default function MarketDetailPage() {
                                                                 {market.sidePrices[idx].toFixed(1)}% of pool
                                                             </div>
                                                         </div>
-                                                        {idx === leadingSideIndex && (
+                                                        {idx === leadingSideIndex && !hasActiveTie && (
                                                             <span className="text-xs bg-white text-black px-2 py-1 rounded">
                                                                 Leading
+                                                            </span>
+                                                        )}
+                                                        {idx === leadingSideIndex && hasActiveTie && (
+                                                            <span className="text-xs bg-white text-black px-2 py-1 rounded">
+                                                                Tied
                                                             </span>
                                                         )}
                                                     </div>
@@ -754,7 +768,7 @@ export default function MarketDetailPage() {
                                             </div>
                                             {market.isTie && market.numWinners > 1 && (
                                                 <div className="text-xs text-dark-muted bg-white/5 p-2 rounded">
-                                                    💡 You bet on {market.winningSides.filter((w, i) => 
+                                                    💡 You bet on {market.winningSides.filter((w, i) =>
                                                         w && position.bets[i].hasBet && position.bets[i].amount.toNumber() > 0
                                                     ).length} of {market.numWinners} winning sides
                                                 </div>
@@ -783,7 +797,7 @@ export default function MarketDetailPage() {
                                 {market.resolved && estimatedPayout === 0 && !position.claimed && (
                                     <div className="bg-dark-bg border border-dark-border rounded-lg p-3 text-center">
                                         <span className="text-dark-muted">
-                                            {market.isTie 
+                                            {market.isTie
                                                 ? 'No winnings (didn\'t bet on any winning sides)'
                                                 : 'No winnings (bet on losing side)'
                                             }
@@ -838,7 +852,7 @@ export default function MarketDetailPage() {
                                     const percentage = market.sidePrices[idx];
                                     const isLeading = idx === leadingSideIndex;
                                     const isWinner = market.resolved && market.winningSides[idx];
-                                    
+
                                     return (
                                         <div key={idx}>
                                             <div className="flex justify-between items-center mb-1">
@@ -857,13 +871,12 @@ export default function MarketDetailPage() {
                                             </div>
                                             <div className="relative h-8 bg-dark-bg rounded-lg overflow-hidden border border-dark-border">
                                                 <div
-                                                    className={`h-full transition-all duration-500 ${
-                                                        isWinner
+                                                    className={`h-full transition-all duration-500 ${isWinner
                                                             ? 'bg-white'
                                                             : isLeading && !market.resolved
                                                                 ? 'bg-white/80'
                                                                 : 'bg-white/40'
-                                                    }`}
+                                                        }`}
                                                     style={{ width: `${percentage}%` }}
                                                 >
                                                     <div className="flex items-center justify-between h-full px-3 text-xs">
@@ -880,11 +893,11 @@ export default function MarketDetailPage() {
                                     );
                                 })}
                             </div>
-                            
+
                             {market.resolved && market.isTie && market.numWinners > 1 && (
                                 <div className="mt-4 p-3 bg-white/5 rounded-lg border border-white/20">
                                     <p className="text-xs text-white">
-                                        <strong>Tie:</strong> {market.numWinners} sides ended with equal amounts. 
+                                        <strong>Tie:</strong> {market.numWinners} sides ended with equal amounts.
                                         Bettors on any winning side share the pool proportionally.
                                     </p>
                                 </div>
