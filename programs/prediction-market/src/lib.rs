@@ -428,6 +428,12 @@ fn try_resolve_market(market: &mut Market) -> Result<()> {
     Ok(())
 }
 
+    // Market PDA seed from the question bytes, truncated to the 32-byte seed limit.
+fn question_seed(question: &str) -> &[u8] {
+    let bytes = question.as_bytes();
+    &bytes[..bytes.len().min(32)]
+}
+
 // Account structures
 #[derive(Accounts)]
 #[instruction(question: String)]
@@ -436,7 +442,7 @@ pub struct CreateMarket<'info> {
         init,
         payer = creator,
         space = 8 + Market::INIT_SPACE,
-        seeds = [b"market", creator.key().as_ref(), question.as_bytes()],
+        seeds = [b"market", creator.key().as_ref(), question_seed(&question)],
         bump
     )]
     pub market: Account<'info, Market>,

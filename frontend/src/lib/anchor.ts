@@ -23,7 +23,7 @@ export function getMarketPda(creator: PublicKey, question: string) {
     [
       Buffer.from('market'),
       creator.toBuffer(),
-      Buffer.from(question),
+      Buffer.from(question).subarray(0, 32),
     ],
     PROGRAM_ID
   );

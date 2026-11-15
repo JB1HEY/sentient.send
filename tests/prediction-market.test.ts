@@ -19,7 +19,7 @@ describe("prediction_market (SOL-based)", () => {
       [
         Buffer.from("market"),
         creator.toBuffer(),
-        Buffer.from(question),
+        Buffer.from(question).subarray(0, 32),
       ],
       program.programId
     );
